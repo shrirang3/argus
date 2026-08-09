@@ -1,0 +1,18 @@
+[project]
+name = "argus-ingest"
+version = "0.1.0"
+description = "Ingestion service — validate, redact, publish to Redis Streams."
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "redis>=5.2",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.7",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "argus",
+]
+
+[tool.uv.sources]
+argus = { workspace = true }

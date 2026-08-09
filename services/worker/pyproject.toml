@@ -1,0 +1,16 @@
+[project]
+name = "argus-worker"
+version = "0.1.0"
+description = "Stream consumer — idempotent writes to Postgres + 1-minute rollups."
+requires-python = ">=3.12"
+dependencies = [
+    "redis>=5.2",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.7",
+    "argus",
+]
+
+[tool.uv.sources]
+argus = { workspace = true }
