@@ -113,14 +113,21 @@ Requires [uv](https://docs.astral.sh/uv/) and Docker.
 ```bash
 cp .env.example .env       # add GROQ_API_KEY
 uv sync --all-packages     # resolve the workspace
-make up                    # postgres, redis, services
+make up                    # postgres, redis, all four services
+make migrate               # apply the schema
+make health                # every service should answer ok
 ```
 
-| | |
+| Service | URL |
 |---|---|
 | Chat | http://localhost:8000 |
-| Dashboard | http://localhost:8002 |
 | Ingestion | http://localhost:8001 |
+| Dashboard | http://localhost:8002 |
+| Postgres | `localhost:5433` — 5433, not 5432, to avoid colliding with a local install |
+| Redis | `localhost:6380` |
+
+Inside the compose network the services still use `postgres:5432` and `redis:6379`;
+only the published host ports are remapped.
 
 <br>
 
@@ -128,7 +135,7 @@ make up                    # postgres, redis, services
 
 | | Phase | Status |
 |---|---|---|
-| **P0** | Repo skeleton · uv workspace · compose | 🟡 in progress |
+| **P0** | Repo skeleton · uv workspace · compose | 🟢 done |
 | **P1** | Chat app — streaming, list / resume / cancel | ⚪ todo |
 | **P2** | `argus` SDK — auto-instrumentation | ⚪ todo |
 | **P3** | Ingestion — validate, redact, publish | ⚪ todo |
