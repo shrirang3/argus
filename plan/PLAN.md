@@ -21,6 +21,7 @@ Project root `/Users/shrirang/argus`. Python 3.13.9, Docker 29.6.2 available.
 | Instrumentation | Monkey-patch provider client classes at import time | Works on code we don't own — including LangGraph internals. An explicit wrapper would capture nothing there. |
 | Event schema | **OTel GenAI semantic conventions** on the wire; flat typed columns in Postgres | `gen_ai.*` names make "works with any stack" provable, not theoretical. Flat columns keep the dashboard queryable and indexable. Mapping happens at the ingest boundary. |
 | Delivery guarantee | At-least-once, deduplicated at write via `event_id` | Exactly-once across HTTP + queue + DB costs far more than a unique constraint. |
+| Frontend | Jinja2 templates + vanilla JS + hand-written CSS. No npm, no bundler, no framework. Chart.js vendored into `static/` | Two screens do not justify a build step or a fifth container. Streaming uses `fetch()` + `ReadableStream` rather than `EventSource`, because `EventSource` is GET-only and the message body must be POSTed — and the same `AbortController` that cancels the stream is what produces the `status="cancelled"` telemetry row. Assets are vendored, not CDN-loaded, so the k8s deploy works without egress. |
 | Rejected | Pipecat | Voice/WebRTC pipeline framework. Wrong domain, unused deps, and its built-in metrics would replace the deliverable being graded. |
 | Rejected | LangSmith / Langfuse | They *are* the product we were asked to build. |
 

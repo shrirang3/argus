@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Argus — chat</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128065;</text></svg>">
+</head>
+<body>
+  <div class="app">
+
+    <aside class="sidebar" id="sidebar">
+      <header class="sidebar-head">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <span class="brand-name">argus</span>
+        </div>
+        <button class="btn btn-new" id="new-chat" title="New conversation">
+          <span aria-hidden="true">+</span> New
+        </button>
+      </header>
+
+      <nav class="conv-list" id="conv-list" aria-label="Conversations">
+        <p class="empty-note" id="conv-empty">No conversations yet.</p>
+      </nav>
+
+      <footer class="sidebar-foot">
+        <a class="foot-link" href="http://localhost:8002" target="_blank" rel="noreferrer">
+          dashboard <span aria-hidden="true">↗</span>
+        </a>
+        <span class="foot-badge" id="backend-badge" title="Backend implementation">stub</span>
+      </footer>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <h1 class="conv-title" id="conv-title">New conversation</h1>
+        <div class="topbar-meta">
+          <span class="meta-item" id="meta-turns">0 turns</span>
+          <button class="btn btn-ghost btn-danger" id="delete-chat" hidden>Delete</button>
+        </div>
+      </header>
+
+      <section class="messages" id="messages" aria-live="polite">
+        <div class="welcome" id="welcome">
+          <div class="welcome-eye" aria-hidden="true"></div>
+          <h2>Every LLM call, watched.</h2>
+          <p>
+            Ask anything. Each turn is captured as an inference log — latency, tokens,
+            cost, errors — and shipped off-process without blocking this conversation.
+          </p>
+          <div class="welcome-hints">
+            <button class="hint" data-prompt="What is my p99 latency in the last hour?">
+              What is my p99 latency in the last hour?
+            </button>
+            <button class="hint" data-prompt="Which model is burning the most cost today?">
+              Which model is burning the most cost today?
+            </button>
+            <button class="hint" data-prompt="Show me the errors from the last 15 minutes.">
+              Show me the errors from the last 15 minutes.
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <footer class="composer">
+        <div class="composer-box">
+          <textarea
+            id="input"
+            rows="1"
+            placeholder="Send a message…  (Enter to send, Shift+Enter for a new line)"
+            autocomplete="off"
+            spellcheck="false"></textarea>
+          <button class="btn btn-send" id="send" title="Send">Send</button>
+          <button class="btn btn-stop" id="stop" title="Stop generating" hidden>Stop</button>
+        </div>
+        <p class="composer-note" id="status-note"></p>
+      </footer>
+    </main>
+
+  </div>
+
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
