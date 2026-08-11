@@ -24,6 +24,10 @@ off-process without ever blocking the request path.
 It ships with a chatbot that gives it something worth watching: an assistant that
 answers questions about **its own inference telemetry**.
 
+> **Status — the chat app is live; the pipeline is next.** Streaming, persistence,
+> conversation list / resume / cancel and a Groq provider all work today
+> ([P1](#roadmap)). The SDK, ingestion, worker and dashboard are still ahead.
+
 <br>
 
 ## One line
@@ -106,17 +110,41 @@ The platform is domain-agnostic. The use case lives in exactly two files —
 
 <br>
 
+## Data model
+
+```
+conversations ──1:N──► messages
+   status (soft delete)   seq         per-conversation ordinal, unique
+   message_count          role        user | assistant | system | tool
+   updated_at             truncated   set when a stream was cancelled
+```
+
+Two decisions worth knowing before reading the schema:
+
+**Conversations are soft-deleted.** Inference logs reference them, and analytics should
+survive a user clearing their sidebar. A partial index — `WHERE status <> 'deleted'` —
+keeps the sidebar query off the dead rows.
+
+**Messages are ordered by an explicit `seq`, not by timestamp.** Rows written in one
+transaction share a `now()`, so timestamp ties are broken arbitrarily by the planner. A
+unique constraint on `(conversation_id, seq)` makes gaps and duplicates impossible
+rather than merely unlikely.
+
+<br>
+
 ## Quickstart
 
 Requires [uv](https://docs.astral.sh/uv/) and Docker.
 
 ```bash
-cp .env.example .env       # add GROQ_API_KEY
+cp .env.example .env       # no API key needed to start
 uv sync --all-packages     # resolve the workspace
 make up                    # postgres, redis, all four services
 make migrate               # apply the schema
 make health                # every service should answer ok
 ```
+
+Open **http://localhost:8000** and start a conversation.
 
 | Service | URL |
 |---|---|
@@ -129,6 +157,25 @@ make health                # every service should answer ok
 Inside the compose network the services still use `postgres:5432` and `redis:6379`;
 only the published host ports are remapped.
 
+### Providers
+
+The stack ships with a **mock provider as the default**, so it runs with no credentials
+at all — you get real streaming, real persistence, real cancellation, against canned
+tokens. For real inference, add a free [Groq](https://console.groq.com) key:
+
+```bash
+GROQ_API_KEY=gsk_...
+DEFAULT_PROVIDER=groq
+ANSWER_MODEL=llama-3.3-70b-versatile
+```
+
+`make up` again and the same interface returns real tokens. Nothing downstream changes —
+every provider is normalised into one `Usage` record at the adapter boundary.
+
+Mock is not only a convenience. Load tests run against it too: pointed at a free-tier
+provider, a 50-concurrent test measures that provider's rate limiter rather than this
+pipeline.
+
 <br>
 
 ## Roadmap
@@ -136,7 +183,7 @@ only the published host ports are remapped.
 | | Phase | Status |
 |---|---|---|
 | **P0** | Repo skeleton · uv workspace · compose | 🟢 done |
-| **P1** | Chat app — streaming, list / resume / cancel | ⚪ todo |
+| **P1** | Chat app — streaming, persistence, list / resume / cancel | 🟢 done |
 | **P2** | `argus` SDK — auto-instrumentation | ⚪ todo |
 | **P3** | Ingestion — validate, redact, publish | ⚪ todo |
 | **P4** | Worker — idempotent writes, rollups | ⚪ todo |
@@ -152,7 +199,14 @@ Full design, decisions, and tradeoffs: [`plan/PLAN.md`](plan/PLAN.md).
 
 ## Stack
 
-`Python 3.12+` · `FastAPI` · `LangGraph` · `Groq` · `Postgres` · `Redis Streams` · `uv` · `Docker` · `Kubernetes`
+`Python 3.12+` · `FastAPI` · `SQLAlchemy` · `Alembic` · `LangGraph` · `Groq` · `Postgres`
+· `Redis Streams` · `uv` · `Docker` · `Kubernetes`
+
+Frontend is Jinja2, hand-written CSS and vanilla JS — no npm, no bundler, no CDN.
+Streaming uses `fetch()` + `ReadableStream` rather than `EventSource`, because
+`EventSource` is GET-only and the message body has to be POSTed. The `AbortController`
+that stops a stream is also what produces the `status="cancelled"` inference log — the
+cancel feature and the telemetry are one mechanism.
 
 ---
 
