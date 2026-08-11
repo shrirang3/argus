@@ -16,6 +16,10 @@ x-service: &service
     STREAM_NAME: ${STREAM_NAME:-llm.inference.v1}
     CONSUMER_GROUP: ${CONSUMER_GROUP:-ingest-workers}
     LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # Defaults to mock so the stack works with no API key at all.
+    DEFAULT_PROVIDER: ${DEFAULT_PROVIDER:-mock}
+    ANSWER_MODEL: ${ANSWER_MODEL:-llama-3.3-70b-versatile}
+    ROUTER_MODEL: ${ROUTER_MODEL:-llama-3.1-8b-instant}
   volumes:
     # Source only — never mount over /app/.venv.
     - ./services:/app/services
