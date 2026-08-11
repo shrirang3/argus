@@ -1,14 +1,14 @@
 """Chat app entrypoint.
 
-Routes currently come from the temporary in-memory stub; P1 swaps that module
-for real Postgres persistence and a real Groq call without touching the UI.
+Routes are backed by Postgres. The provider behind them is selected by
+DEFAULT_PROVIDER and defaults to a mock that needs no API key.
 """
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from stub import router as api_router
+from routes import router as api_router
 
 app = FastAPI(title="argus-chat", version="0.1.0")
 app.include_router(api_router)
