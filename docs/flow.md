@@ -316,7 +316,7 @@ indistinguishable from a free call and would quietly understate spend.
 
 ```sql
 INSERT INTO inference_logs (...) VALUES (...)
-  ON CONFLICT (event_id) DO NOTHING;     -- absorbs redelivery
+  ON CONFLICT (event_id, started_at) DO NOTHING;   -- absorbs redelivery
 -- then bump inference_metrics_1m, then XACK (never before the commit)
 ```
 
