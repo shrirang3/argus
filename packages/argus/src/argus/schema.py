@@ -65,6 +65,11 @@ class InferenceEvent(BaseModel):
     completion_tokens: int | None = None
     total_tokens: int | None = None
 
+    # Filled by the ingestion service, never by the SDK. Pricing is a platform
+    # concern that changes without any client changing — an SDK shipping a price
+    # list would be wrong in production the day a vendor updates it.
+    cost_usd: float | None = None
+
     # Previews only, already redacted. Full text lives in `messages`; bounding
     # this column is what keeps the log table from becoming the biggest thing in
     # the database.

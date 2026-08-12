@@ -28,6 +28,9 @@ select = ["E", "F", "I", "UP", "B"]
 # `op` and `sa` are the migration API — the template imports them whether or not
 # a given revision happens to use both.
 "db/migrations/versions/*" = ["F401"]
+# Service modules are imported after a sys.path insert, so the import cannot
+# sit at the top of the file.
+"tests/unit/test_ingestion.py" = ["E402"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
