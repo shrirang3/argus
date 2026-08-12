@@ -20,14 +20,14 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-import otlp
-import store
 from argus import redact
 from argus.schema import InferenceEvent, IngestResult
-from config import REDACT_AT_EDGE, cost_usd
 from fastapi import FastAPI, HTTPException, Request, Response
 from pydantic import ValidationError
 from sqlalchemy import text
+
+from . import otlp, store
+from .config import REDACT_AT_EDGE, cost_usd
 
 logging.basicConfig(level="INFO")
 log = logging.getLogger("argus.ingest")

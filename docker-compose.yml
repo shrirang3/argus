@@ -68,8 +68,8 @@ services:
 
   chat:
     <<: *service
-    working_dir: /app/services/chat_app
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    working_dir: /app/services
+    command: ["uvicorn", "chat_app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
     healthcheck:
@@ -81,8 +81,8 @@ services:
 
   ingestion:
     <<: *service
-    working_dir: /app/services/ingestion
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
+    working_dir: /app/services
+    command: ["uvicorn", "ingestion.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
     ports:
       - "8001:8001"
     healthcheck:
@@ -94,8 +94,8 @@ services:
 
   dashboard:
     <<: *service
-    working_dir: /app/services/dashboard
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+    working_dir: /app/services
+    command: ["uvicorn", "dashboard.main:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
     ports:
       - "8002:8002"
     healthcheck:
@@ -107,8 +107,8 @@ services:
 
   worker:
     <<: *service
-    working_dir: /app/services/worker
-    command: ["python", "main.py"]
+    working_dir: /app/services
+    command: ["python", "-m", "worker.main"]
     # No HTTP surface — liveness is a heartbeat file, same probe shape k8s will use.
     healthcheck:
       test:

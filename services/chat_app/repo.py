@@ -10,9 +10,10 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from models import Conversation, Message
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from .models import Conversation, Message
 
 CONTEXT_WINDOW_TURNS = 10
 

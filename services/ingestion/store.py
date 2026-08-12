@@ -12,9 +12,10 @@ import json
 import logging
 
 import redis.asyncio as redis
-from config import DATABASE_URL, REDIS_URL, STREAM_MAXLEN, STREAM_NAME
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from .config import DATABASE_URL, REDIS_URL, STREAM_MAXLEN, STREAM_NAME
 
 log = logging.getLogger("argus.ingest.store")
 

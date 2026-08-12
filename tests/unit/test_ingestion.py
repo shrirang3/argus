@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "ingestion"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services"))
 
-import otlp  # noqa: E402
-from config import cost_usd  # noqa: E402
+from ingestion import otlp  # noqa: E402
+from ingestion.config import cost_usd  # noqa: E402
 
 # ------------------------------------------------------------------ pricing
 
