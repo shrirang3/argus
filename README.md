@@ -193,6 +193,8 @@ pipeline.
 | **P8** | Kubernetes — self-hosted deploy | ⚪ todo |
 | **P9** | Docs + demo | ⚪ todo |
 
+Architecture, data formats at every hop, API and table reference:
+[`docs/flow.md`](docs/flow.md).
 Full design, decisions, and tradeoffs: [`plan/PLAN.md`](plan/PLAN.md).
 
 <br>
