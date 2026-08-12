@@ -12,6 +12,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 
+import argus
 import repo
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -142,40 +143,44 @@ async def _generate(cid: uuid.UUID, context: list[dict[str, str]]) -> AsyncItera
     usage: Usage | None = None
     status = "success"
 
-    try:
-        async for chunk in stream_chat(context):
-            if isinstance(chunk, Usage):
-                usage = chunk
-                break
-            if cid in _CANCELLED:
-                status = "cancelled"
-                break
-            acc.append(chunk)
-            yield _sse("token", text=chunk)
+    # The only telemetry line the application writes. Every provider call made
+    # inside this block is captured by the SDK and tagged with this id —
+    # including calls made by code we do not own.
+    with argus.conversation(cid):
+        try:
+            async for chunk in stream_chat(context):
+                if isinstance(chunk, Usage):
+                    usage = chunk
+                    break
+                if cid in _CANCELLED:
+                    status = "cancelled"
+                    break
+                acc.append(chunk)
+                yield _sse("token", text=chunk)
 
-    except asyncio.CancelledError:
-        # The client aborted its fetch. Record, then re-raise — swallowing this
-        # tells the event loop the task refused to die.
-        status = "cancelled"
-        raise
-    except ProviderError as exc:
-        status = exc.kind
-        yield _sse("error", message=str(exc))
-    finally:
-        _CANCELLED.discard(cid)
-        # finally, not the success path: completion, server-side cancel and
-        # client disconnect are three different exits and a partial reply must
-        # survive all three.
-        if acc:
-            async with SessionLocal() as session:
-                await repo.add_message(
-                    session,
-                    cid,
-                    "assistant",
-                    "".join(acc),
-                    truncated=status == "cancelled",
-                    token_count=usage.completion_tokens if usage else None,
-                )
+        except asyncio.CancelledError:
+            # The client aborted its fetch. Record, then re-raise — swallowing
+            # this tells the event loop the task refused to die.
+            status = "cancelled"
+            raise
+        except ProviderError as exc:
+            status = exc.kind
+            yield _sse("error", message=str(exc))
+        finally:
+            _CANCELLED.discard(cid)
+            # finally, not the success path: completion, server-side cancel and
+            # client disconnect are three different exits and a partial reply
+            # must survive all three.
+            if acc:
+                async with SessionLocal() as session:
+                    await repo.add_message(
+                        session,
+                        cid,
+                        "assistant",
+                        "".join(acc),
+                        truncated=status == "cancelled",
+                        token_count=usage.completion_tokens if usage else None,
+                    )
 
     yield _sse(
         "done",
