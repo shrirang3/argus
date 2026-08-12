@@ -8,77 +8,114 @@ service and stop there, in memory. Redis, the worker and the log tables are next
 
 ---
 
-## 1. The whole system
+## 1. Two paths
+
+The system is two pipelines that touch at exactly one point. Keeping them separate is
+the whole design, so they are drawn separately.
+
+- **Request path** — the user's turn. Synchronous, must be fast.
+- **Telemetry path** — what happened. Asynchronous, must never block the first.
+
+### 1a. Request path
 
 ```
-                                   ┌─────────────────────┐
-                                   │       BROWSER       │
-                                   │ Jinja2 + vanilla JS │
-                                   └──────────┬──────────┘
-                                        ① │  ▲ ⑥
-                                    POST │  │ SSE
-                                          ▼  │
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  chat-app  :8000                    services/chat_app/                       │
-│                                                                              │
-│   routes.py ──► repo.py ──② SQL──►  ┌──────────────────┐                     │
-│      │                              │    POSTGRES      │                     │
-│      │  ◄──────────③ rows───────────│  conversations   │                     │
-│      │                              │  messages        │                     │
-│      ▼                              └──────────────────┘                     │
-│   llm.py  ──④ messages[] ──────────────────────────────────► GROQ API        │
-│      ▲                                                          │            │
-│      └──────────────── ⑤ SSE chunks ────────────────────────────┘            │
-│                             ╎                                                │
-│              ┌──────────────╎────────────────┐                               │
-│              │  argus SDK   ╎  PATCH POINT   │  packages/argus/              │
-│              │  AsyncCompletions.create      │                               │
-│              │  ├─ contextvar → conv_id      │                               │
-│              │  ├─ redact previews           │                               │
-│              │  ├─ TTFT on first token       │                               │
-│              │  └─ emit() → deque(10k)       │                               │
-│              └──────────────┬────────────────┘                               │
-└─────────────────────────────╎────────────────────────────────────────────────┘
-                              ⑦ POST /v1/events   (batched ≤50 / 500ms)
-                              ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  ingestion  :8001                                                            │
-│   validate per-row ──► ✅ accepted ──┐        ❌ rejected ──► quarantine      │
-└──────────────────────────────────────╎───────────────────────────────────────┘
-                                       ╎
-        ═══════════════════════════════ ╎ ═══════════ NOT BUILT YET ═══════════
-                                       ▼ ⑧ XADD
-                            ┌──────────────────────┐
-                            │  REDIS STREAMS       │   llm.inference.v1
-                            │  + DLQ stream        │        (P3)
-                            └──────────┬───────────┘
-                                       │ XREADGROUP  (group: ingest-workers)
-                                       ▼
-                            ┌──────────────────────┐
-                            │  worker              │   ON CONFLICT DO NOTHING
-                            │  idempotent + rollup │        (P4)
-                            └──────────┬───────────┘
-                                       │ ⑨ INSERT
-                                       ▼
-                            ┌──────────────────────┐
-                            │  POSTGRES            │   inference_logs
-                            │                      │   inference_metrics_1m
-                            │                      │   dead_letter_events
-                            └──────────┬───────────┘
-                                       │ SELECT
-                                       ▼
-                            ┌──────────────────────┐
-                            │  dashboard  :8002    │   p50/p95/p99 · cost
-                            └──────────────────────┘        (P6)
-                                       ▲
-                                       └── agent tools read this back (P5)
+        ┌───────────────────────────────┐
+        │            BROWSER            │
+        └───────────────┬───────────────┘
+                        │  ①  POST /api/conversations/{id}/messages
+                        │      {"content": "..."}
+                        ▼
+        ┌───────────────────────────────┐
+        │      chat-app  routes.py      │
+        └───────────────┬───────────────┘
+                        │  ②  INSERT message · UPDATE counters
+                        │      SELECT last 20 rows
+                        ▼
+        ┌───────────────────────────────┐
+        │    POSTGRES   conversations   │
+        │               messages        │
+        └───────────────┬───────────────┘
+                        │  ③  [{role, content}, ...]
+                        ▼
+        ┌───────────────────────────────┐
+        │       chat-app  llm.py        │
+        └───────────────┬───────────────┘
+                        │  ④  messages[] · stream=true
+                        ▼
+        ┌───────────────────────────────┐
+        │           GROQ API            │
+        └───────────────┬───────────────┘
+                        │  ⑤  SSE chunks · usage on the last one
+                        ▼
+        ┌───────────────────────────────┐
+        │     chat-app  _generate()     │
+        └───────────────┬───────────────┘
+                        │  ⑥  event: token  /  event: done
+                        ▼
+        ┌───────────────────────────────┐
+        │            BROWSER            │
+        └───────────────────────────────┘
 ```
+
+### 1b. Telemetry path
+
+Branches off at ⑤, inside the Groq call, and never rejoins.
+
+```
+                   ⑤  the provider call above
+                        │
+                        ▼
+        ┌───────────────────────────────┐
+        │   argus SDK   PATCH POINT     │   packages/argus/
+        │   AsyncCompletions.create     │
+        │                               │
+        │   contextvar → conversation   │
+        │   redact input / output       │
+        │   TTFT on first token         │
+        │   emit() → deque(10 000)      │
+        └───────────────┬───────────────┘
+                        │  ⑦  POST /v1/events
+                        │      batch ≤50, every 500ms
+                        ▼
+        ┌───────────────────────────────┐          ┌──────────────────┐
+        │      ingestion  :8001         ├─────────►│    quarantine    │
+        │      validate each row        │  invalid │  dead letter     │
+        └───────────────┬───────────────┘          └──────────────────┘
+                        │
+     ═══════════════════╪═══════════════════  everything below is P3 / P4
+                        │
+                        │  ⑧  XADD  llm.inference.v1
+                        ▼
+        ┌───────────────────────────────┐
+        │         REDIS STREAMS         │
+        └───────────────┬───────────────┘
+                        │      XREADGROUP · group ingest-workers
+                        ▼
+        ┌───────────────────────────────┐
+        │            worker             │
+        │     idempotent · rollups      │
+        └───────────────┬───────────────┘
+                        │  ⑨  INSERT ... ON CONFLICT (event_id) DO NOTHING
+                        ▼
+        ┌───────────────────────────────┐
+        │  POSTGRES   inference_logs    │
+        │             inference_metrics │
+        └───────────────┬───────────────┘
+                        │      SELECT
+                        ▼
+        ┌───────────────────────────────┐
+        │       dashboard  :8002        │   p50 · p95 · p99 · cost
+        └───────────────────────────────┘
+```
+
+The P5 agent reads `inference_logs` back through its tools, which is what closes the
+demo loop: the chatbot answers questions about the telemetry its own answers produced.
 
 ### The one invariant
 
-**The request path never waits on the logging path.** Hop ⑦ is fire-and-forget: the SDK
-appends to a bounded in-memory buffer and returns. Everything downstream of it can be
-slow, broken or absent and the chat keeps serving.
+**The request path never waits on the telemetry path.** Hop ⑦ is fire-and-forget — the
+SDK appends to a bounded in-memory buffer and returns. Everything below it can be slow,
+broken or entirely absent and the chat keeps serving.
 
 Measured: with `ingestion` stopped mid-traffic, the chat answered normally, the emitter
 recorded one send failure, and the event landed in `spill.jsonl` on disk.
