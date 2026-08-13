@@ -27,6 +27,11 @@ ANSWER_MODEL = os.getenv("ANSWER_MODEL", "llama-3.3-70b-versatile")
 ROUTER_MODEL = os.getenv("ROUTER_MODEL", "llama-3.1-8b-instant")
 MOCK_MODEL = "mock-1"
 
+# Cerebras serves open-weight models (Llama, Qwen) behind an OpenAI-wire
+# compatible endpoint — no closed-weight provider is wired into this stack.
+CEREBRAS_MODEL = os.getenv("CEREBRAS_MODEL", "llama-3.3-70b")
+CEREBRAS_BASE_URL = "https://api.cerebras.ai/v1"
+
 
 @dataclass
 class Usage:
@@ -177,6 +182,88 @@ async def _stream_groq(messages: list[dict[str, str]], model: str) -> AsyncItera
 
 
 # --------------------------------------------------------------------------- #
+# cerebras (open-weight models, OpenAI-wire compatible)
+# --------------------------------------------------------------------------- #
+
+_cerebras_client = None
+
+
+def _get_cerebras():
+    """Reached through the `openai` package pointed at Cerebras' base_url.
+
+    Same wire shape as OpenAI, but every model behind it is open-weight
+    (Llama, Qwen) — this is not a route to closed-weight OpenAI models. Reusing
+    the `openai` SDK rather than a bespoke client also means P2's instrument
+    patch on `openai.resources.chat.completions` already covers it for free.
+    """
+    global _cerebras_client
+    if _cerebras_client is None:
+        from openai import AsyncOpenAI
+
+        api_key = os.getenv("CEREBRAS_API_KEY")
+        if not api_key:
+            raise ProviderError("CEREBRAS_API_KEY is not set", kind="error")
+        _cerebras_client = AsyncOpenAI(
+            api_key=api_key, base_url=CEREBRAS_BASE_URL, max_retries=2, timeout=60.0
+        )
+    return _cerebras_client
+
+
+def _classify_openai_wire(exc: Exception) -> str:
+    import openai
+
+    if isinstance(exc, openai.RateLimitError):
+        return "rate_limited"
+    if isinstance(exc, openai.APITimeoutError):
+        return "timeout"
+    return "error"
+
+
+async def _stream_cerebras(messages: list[dict[str, str]], model: str) -> AsyncIterator[str | Usage]:
+    client = _get_cerebras()
+
+    try:
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            stream=True,
+            # Unlike Groq, OpenAI-wire servers only attach usage to the final
+            # chunk when explicitly asked.
+            stream_options={"include_usage": True},
+        )
+
+        usage: Usage | None = None
+
+        async for chunk in stream:
+            raw_usage = getattr(chunk, "usage", None)
+            if raw_usage is not None:
+                usage = Usage(
+                    provider="cerebras",
+                    model=getattr(chunk, "model", model),
+                    prompt_tokens=raw_usage.prompt_tokens or 0,
+                    completion_tokens=raw_usage.completion_tokens or 0,
+                )
+
+            if not chunk.choices:
+                continue
+
+            choice = chunk.choices[0]
+            if choice.finish_reason and usage is not None:
+                usage.finish_reason = choice.finish_reason
+
+            delta = choice.delta.content
+            if delta:
+                yield delta
+
+        yield usage or Usage(provider="cerebras", model=model, finish_reason="stop")
+
+    except ProviderError:
+        raise
+    except Exception as exc:  # noqa: BLE001 — deliberately broad, then classified
+        raise ProviderError(str(exc), kind=_classify_openai_wire(exc)) from exc
+
+
+# --------------------------------------------------------------------------- #
 # dispatch
 # --------------------------------------------------------------------------- #
 
@@ -205,6 +292,9 @@ async def stream_chat(
             yield chunk
         return
 
-    # openai and cerebras are both OpenAI-wire compatible and will share one
-    # adapter parameterised by base_url; they land in P7 with a key to test on.
+    if provider == "cerebras":
+        async for chunk in _stream_cerebras(messages, model or CEREBRAS_MODEL):
+            yield chunk
+        return
+
     raise ProviderError(f"provider '{provider}' is not wired yet", kind="error")

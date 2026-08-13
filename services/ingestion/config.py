@@ -30,10 +30,12 @@ PRICING: dict[str, dict[str, float]] = {
         "openai/gpt-oss-20b": {"input": 0.10, "output": 0.50},
         "qwen/qwen3.6-27b": {"input": 0.29, "output": 0.39},
     },
-    "openai": {
-        "gpt-4.1": {"input": 2.00, "output": 8.00},
-        "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
-        "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
+    # Reached through the openai SDK against a different base_url, but these
+    # are the same open-weight models Groq serves — not closed-weight OpenAI.
+    "cerebras": {
+        "llama-3.3-70b": {"input": 0.85, "output": 1.20},
+        "llama3.1-8b": {"input": 0.10, "output": 0.10},
+        "qwen-3-32b": {"input": 0.40, "output": 0.80},
     },
     "mock": {
         "mock-1": {"input": 0.0, "output": 0.0},

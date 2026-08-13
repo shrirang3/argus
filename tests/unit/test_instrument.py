@@ -266,6 +266,34 @@ async def test_concurrent_conversations_do_not_leak_ids(captured, config):
     assert sorted(str(e.conversation_id) for e in captured) == sorted(ids)
 
 
+async def test_openai_wire_provider_is_resolved_by_base_url(captured, config):
+    """Cerebras and (were it wired) OpenAI share the same patched classes —
+    only `base_url` at call time tells them apart.
+    """
+
+    class FakeClient:
+        def __init__(self, base_url):
+            self.base_url = base_url
+
+    class AsyncCompletions:
+        def __init__(self, base_url):
+            self._client = FakeClient(base_url)
+
+        async def create(self, **kwargs):
+            return response()
+
+    instrument._patch(
+        AsyncCompletions, "create", instrument._resolve_openai_wire_provider, config, is_async=True
+    )
+    try:
+        await AsyncCompletions("https://api.cerebras.ai/v1").create(model="m", messages=[])
+        await AsyncCompletions("https://api.openai.com/v1").create(model="m", messages=[])
+    finally:
+        instrument.uninstall()
+
+    assert [e.provider for e in captured] == ["cerebras", "openai"]
+
+
 def test_install_is_idempotent(config):
     first = instrument.install(config)
     second = instrument.install(config)

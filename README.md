@@ -26,7 +26,8 @@ answers questions about **its own inference telemetry**.
 > **Status — the pipeline is complete end to end.** A chat message is captured by the
 > SDK, validated and priced at the edge, queued through Redis, written to Postgres by a
 > worker, and charted on the dashboard — with nothing in the request path waiting on any
-> of it. Multi-provider, Kubernetes and the demo are what remain.
+> of it. Groq and Cerebras are both wired — open-weight models only, pinned per
+> conversation. Kubernetes and the demo are what remain.
 
 <br>
 
@@ -174,6 +175,23 @@ ANSWER_MODEL=llama-3.3-70b-versatile
 `make up` again and the same interface returns real tokens. Nothing downstream changes —
 every provider is normalised into one `Usage` record at the adapter boundary.
 
+**Open-weight models only.** No closed-weight provider is wired in. A second backend,
+[Cerebras](https://cloud.cerebras.ai), serves the same kind of model (Llama, Qwen) over an
+OpenAI-wire-compatible endpoint:
+
+```bash
+CEREBRAS_API_KEY=csk-...
+```
+
+Each conversation can be pinned to a provider/model at creation
+(`POST /api/conversations {"provider": "cerebras", "model": "llama-3.3-70b"}`); left
+unset, it adopts whatever `DEFAULT_PROVIDER` answers on the first turn and stays there for
+the rest of its life. Cerebras is reached through the `openai` SDK pointed at a different
+`base_url`, so the SDK's existing `openai.*` instrumentation patch covers it — the request
+handler that resolves the provider tag reads the client's `base_url` at call time rather
+than trusting which class was patched, so mixed traffic on one process still lands as
+`groq` or `cerebras`, never a blanket `openai`.
+
 Mock is not only a convenience. Load tests run against it too: pointed at a free-tier
 provider, a 50-concurrent test measures that provider's rate limiter rather than this
 pipeline.
@@ -191,7 +209,7 @@ pipeline.
 | **P4** | Worker — consumer group, dedupe, rollups | 🟢 done |
 | **P5** | Agent — telemetry tools over the same data | ⚪ deferred, not required by the brief |
 | **P6** | Dashboard — latency, throughput, errors, cost | 🟢 done |
-| **P7** | Multi-provider — OpenAI, Cerebras | ⚪ todo |
+| **P7** | Multi-provider — Groq + Cerebras, open-weight models only, per-conversation pin | 🟢 done |
 | **P8** | Kubernetes — self-hosted deploy | ⚪ todo |
 | **P9** | Docs + demo | ⚪ todo |
 

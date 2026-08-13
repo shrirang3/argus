@@ -4,7 +4,8 @@ Living document — describes what exists today, and marks what does not. Update
 phase lands. Every number in here was measured, not estimated.
 
 **Current state:** the pipeline runs end to end — chat → SDK → ingestion → Redis →
-worker → Postgres → dashboard. Multi-provider adapters, Kubernetes and the demo remain.
+worker → Postgres → dashboard. Groq and Cerebras are both wired (open-weight models
+only), pinned per conversation. Kubernetes and the demo remain.
 
 ---
 
@@ -184,6 +185,32 @@ data: [DONE]
 `queue_time` is Groq-specific and worth keeping: on a measured call it was **0.164s
 against 0.018s of actual generation** — nine tenths of the wait was queueing, invisible
 in end-to-end latency alone.
+
+### ④b chat-app → Cerebras (open-weight, alternate provider)
+
+Same wire shape, via the official `openai` SDK pointed at `base_url=https://api.cerebras.ai/v1`
+— no closed-weight provider is wired into this stack; Cerebras serves the same class of
+model (Llama, Qwen) Groq does. One real divergence from Groq: usage is **not** attached
+to the final chunk unless asked —
+
+```json
+{"model": "llama-3.3-70b", "messages": [...], "stream": true,
+ "stream_options": {"include_usage": true}}
+```
+
+`stream_options` missing → `Usage` never fires → `cost_usd` stays `NULL` forever. This
+bit us in the design, not in prod — worth stating as a known trap.
+
+**Provider tagging problem:** Cerebras and OpenAI would share the exact same patched
+SDK classes (`openai.resources.chat.completions.*`). The instrumentation resolves the
+provider tag **per call**, from `self._client.base_url`, not from which class got
+patched — one patch point, two identities, resolved late. See `instrument.py`,
+`_resolve_openai_wire_provider`.
+
+**Per-conversation pin:** `POST /api/conversations {"provider": "cerebras"}` locks a
+conversation to one backend for its life. Left unset, the conversation adopts whatever
+`DEFAULT_PROVIDER` answers on turn one (`repo.set_provider_if_unset`, a guarded
+`UPDATE ... WHERE provider IS NULL` — race-safe by construction, not by convention).
 
 ### ⑥ chat-app → browser
 
@@ -532,7 +559,7 @@ log. One mechanism, two requirements.
 | ✅ | worker — consumer group, dedupe, rollups | done |
 | ✅ | dashboard — latency, throughput, errors, cost, pipeline health | done |
 | ⚪ | Agent + telemetry tools | deferred — not asked for by the brief |
-| ⚪ | OpenAI / Cerebras adapters | P7 |
+| ✅ | Cerebras adapter, open-weight only, per-conversation pin | done — P7 |
 | ⚪ | Kubernetes | P8 |
 
 **The gap right now:** events reach Redis and stop there. `XLEN` grows, `groups` is empty

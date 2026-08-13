@@ -246,15 +246,27 @@ def _merge(previous, extraction):
 # --------------------------------------------------------------------------- #
 
 
-def _patch(cls, method_name: str, provider: str, config, is_async: bool) -> None:
+def _resolve_openai_wire_provider(self) -> str:
+    """Cerebras is reached through the `openai` package pointed at a different
+    `base_url` — same classes, different vendor. Tag by base_url at call time
+    rather than at patch time, since one patched class serves both.
+    """
+    base_url = str(getattr(self, "_client", self).base_url or "")
+    if "cerebras" in base_url:
+        return "cerebras"
+    return "openai"
+
+
+def _patch(cls, method_name: str, provider, config, is_async: bool) -> None:
     original = getattr(cls, method_name)
     _originals.append((cls, method_name, original))
+    resolve = provider if callable(provider) else (lambda self: provider)
 
     if is_async:
 
         async def patched(self, *args, **kwargs):
             started = time.perf_counter()
-            event = _new_event(config, provider, kwargs)
+            event = _new_event(config, resolve(self), kwargs)
             try:
                 result = await original(self, *args, **kwargs)
             except Exception as exc:
@@ -279,7 +291,7 @@ def _patch(cls, method_name: str, provider: str, config, is_async: bool) -> None
 
         def patched(self, *args, **kwargs):
             started = time.perf_counter()
-            event = _new_event(config, provider, kwargs)
+            event = _new_event(config, resolve(self), kwargs)
             try:
                 result = original(self, *args, **kwargs)
             except Exception as exc:
@@ -308,10 +320,18 @@ def _patch(cls, method_name: str, provider: str, config, is_async: bool) -> None
     setattr(cls, method_name, patched)
 
 
-# (module path, sync class, async class, provider name)
+# (module path, sync class, async class, provider name or resolver)
+# Cerebras is reached via the `openai` package pointed at a different base_url
+# (open-weight models only — no closed OpenAI models in this stack), so the
+# patched openai.* classes resolve their provider tag dynamically per call.
 _TARGETS = [
     ("groq.resources.chat.completions", "Completions", "AsyncCompletions", "groq"),
-    ("openai.resources.chat.completions", "Completions", "AsyncCompletions", "openai"),
+    (
+        "openai.resources.chat.completions",
+        "Completions",
+        "AsyncCompletions",
+        _resolve_openai_wire_provider,
+    ),
 ]
 
 
@@ -340,7 +360,8 @@ def install(config) -> list[str]:
                 continue
             try:
                 _patch(cls, "create", provider, config, is_async)
-                patched.append(f"{provider}.{cls_name}.create")
+                label = provider if isinstance(provider, str) else "openai-wire"
+                patched.append(f"{label}.{cls_name}.create")
             except Exception:  # noqa: BLE001
                 log.debug("argus: could not patch %s.%s", module_path, cls_name, exc_info=True)
 

@@ -15,7 +15,7 @@ Project root `/Users/shrirang/argus`. Python 3.13.9, Docker 29.6.2 available.
 | Decision | Choice | Why |
 |---|---|---|
 | Stack | All Python — FastAPI everywhere, Jinja2 + vanilla JS UI | User preference. UI is plainer than React but fully capable of SSE streaming, cancel, resume. |
-| Provider | **Groq** wired; OpenAI + Anthropic adapters present, switchable via `providers.yaml` | User has Groq keys. Multi-provider bonus satisfied structurally, not just aspirationally. |
+| Provider | **Groq** wired; **Cerebras** wired for P7 — open-weight models only, no closed-weight provider | User has Groq keys. Multi-provider bonus satisfied with two real backends serving the same class of model, pinned per conversation. |
 | Orchestration | **LangGraph, checkpointer disabled** | Demo has real branching (route → tools → answer). Skipping the checkpointer keeps `conversations`/`messages` in *our* schema — the brief explicitly grades schema design, and LangGraph's `checkpoints`/`checkpoint_blobs` tables are opaque msgpack we can't join against. Also gives the README its strongest line: instrumentation proven against a framework we don't control. |
 | Persistence | 100% our own Postgres tables | See above. LangGraph never touches the DB. |
 | Instrumentation | Monkey-patch provider client classes at import time | Works on code we don't own — including LangGraph internals. An explicit wrapper would capture nothing there. |
@@ -272,7 +272,7 @@ dead_letter_events
 | **P4** Worker | Consumer group, idempotent upsert, rollups, `XAUTOCLAIM`, poison handling | Kill worker mid-batch → restart → zero loss, zero duplicates |
 | **P5** Agent | LangGraph route/tools/answer, `MAX_STEPS`, tool registry, freshness rule | Ask *"what's my p99?"* → correct answer, 3 new rows logged for that turn |
 | **P6** Dashboard | Latency/throughput/error/cost charts, recent table, SDK health | Charts move under load; p99 visibly separates from p50 |
-| **P7** Multi-provider | OpenAI + Anthropic adapters, `providers.yaml`, per-conversation switch | Same conversation switched mid-flight; both rows normalized identically |
+| **P7** Multi-provider | Cerebras adapter (open-weight models only — no closed-weight provider), per-conversation pin at creation | New conversation pinned to a provider/model; an unpinned one adopts whatever `DEFAULT_PROVIDER` answers on turn one; both rows normalized identically |
 | **P8** k8s | namespace, deployments, services, ingress, secrets, configmap, HPA on worker; tested on kind/k3s | `kubectl apply -k k8s/` yields a working stack |
 | **P9** Docs + demo | README (setup / architecture / schema decisions / tradeoffs / next), `ARCHITECTURE.md` (ingestion flow, logging strategy, scaling, failure assumptions), screenshots or Loom | Fresh clone → `docker compose up` → working app, from README alone |
 

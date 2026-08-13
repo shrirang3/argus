@@ -34,12 +34,23 @@ class NewMessage(BaseModel):
     content: str = Field(min_length=1, max_length=32_000)
 
 
+class NewConversation(BaseModel):
+    """Provider/model pin for this conversation. Both open-weight-only —
+    `groq` or `cerebras` — omit either to fall back to `DEFAULT_PROVIDER`.
+    """
+
+    provider: str | None = None
+    model: str | None = None
+
+
 def _conv_summary(conv: Conversation) -> dict:
     return {
         "id": str(conv.id),
         "title": conv.title,
         "created_at": conv.created_at.isoformat(),
         "message_count": conv.message_count,
+        "provider": conv.provider,
+        "model": conv.model,
     }
 
 
@@ -66,8 +77,13 @@ def _parse_id(conversation_id: str) -> uuid.UUID:
 
 
 @router.post("/conversations")
-async def create_conversation(session: SessionDep) -> dict:
-    conv = await repo.create_conversation(session)
+async def create_conversation(
+    session: SessionDep, body: NewConversation | None = None
+) -> dict:
+    # Optional body: the sidebar's "new chat" button sends none and gets
+    # DEFAULT_PROVIDER; a provider picker (or a script) can pin one explicitly.
+    body = body or NewConversation()
+    conv = await repo.create_conversation(session, provider=body.provider, model=body.model)
     return _conv_summary(conv)
 
 
@@ -125,13 +141,19 @@ async def send_message(
     _CANCELLED.discard(cid)
 
     return StreamingResponse(
-        _generate(cid, context),
+        _generate(cid, context, provider=conv.provider, model=conv.model),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-async def _generate(cid: uuid.UUID, context: list[dict[str, str]]) -> AsyncIterator[str]:
+async def _generate(
+    cid: uuid.UUID,
+    context: list[dict[str, str]],
+    *,
+    provider: str | None,
+    model: str | None,
+) -> AsyncIterator[str]:
     """Stream the reply and persist whatever was produced.
 
     This runs after the route handler has returned, so it opens its own session
@@ -148,7 +170,7 @@ async def _generate(cid: uuid.UUID, context: list[dict[str, str]]) -> AsyncItera
     # including calls made by code we do not own.
     with argus.conversation(cid):
         try:
-            async for chunk in stream_chat(context):
+            async for chunk in stream_chat(context, provider=provider, model=model):
                 if isinstance(chunk, Usage):
                     usage = chunk
                     break
@@ -181,6 +203,11 @@ async def _generate(cid: uuid.UUID, context: list[dict[str, str]]) -> AsyncItera
                         truncated=status == "cancelled",
                         token_count=usage.completion_tokens if usage else None,
                     )
+                    if usage is not None:
+                        # A conversation created without an explicit pin adopts
+                        # whatever DEFAULT_PROVIDER actually answered, so the
+                        # sidebar and every later turn stay pinned to it too.
+                        await repo.set_provider_if_unset(session, cid, usage.provider, usage.model)
 
     yield _sse(
         "done",

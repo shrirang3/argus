@@ -18,11 +18,28 @@ from .models import Conversation, Message
 CONTEXT_WINDOW_TURNS = 10
 
 
-async def create_conversation(session: AsyncSession) -> Conversation:
-    conv = Conversation(id=uuid.uuid4())
+async def create_conversation(
+    session: AsyncSession, *, provider: str | None = None, model: str | None = None
+) -> Conversation:
+    """`provider`/`model` pin this conversation to one backend for its whole
+    life. Left unset, the app falls back to `DEFAULT_PROVIDER` and the first
+    successful reply fills them in — see `set_provider_if_unset`.
+    """
+    conv = Conversation(id=uuid.uuid4(), provider=provider, model=model)
     session.add(conv)
     await session.commit()
     return conv
+
+
+async def set_provider_if_unset(
+    session: AsyncSession, conversation_id: uuid.UUID, provider: str, model: str
+) -> None:
+    await session.execute(
+        update(Conversation)
+        .where(Conversation.id == conversation_id, Conversation.provider.is_(None))
+        .values(provider=provider, model=model)
+    )
+    await session.commit()
 
 
 async def get_conversation(
