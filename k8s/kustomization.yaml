@@ -1,0 +1,21 @@
+# This is what makes `kubectl apply -k k8s/` a single command instead of nine.
+# Kustomize just applies every listed file, in this order, as one unit — no
+# templating, no Helm, nothing generated. Order matters where there's a real
+# dependency (namespace before anything that references it); Kustomize doesn't
+# enforce an order on its own, kubectl's controllers just retry until
+# dependencies exist, but listing it sensibly here is a readability courtesy.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: argus
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres.yaml
+  - redis.yaml
+  - chat.yaml
+  - ingestion.yaml
+  - dashboard.yaml
+  - worker.yaml
+  - hpa.yaml
+  - ingress.yaml

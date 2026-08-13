@@ -1,0 +1,23 @@
+# kind runs the k8s node itself as a Docker container. By default nothing
+# inside that container is reachable from your Mac — extraPortMappings punches
+# 80/443 through to the host, and the ingress-ready label is what tells
+# ingress-nginx's own kind-specific manifest to schedule its controller Pod on
+# this node using a hostPort, not a LoadBalancer Service (kind has no cloud
+# load balancer to hand one out).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP

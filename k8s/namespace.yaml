@@ -1,0 +1,8 @@
+# Everything else in k8s/ targets this namespace. Without one, every object
+# lands in `default` and collides with anything else on the cluster — a
+# namespace is the cheapest isolation boundary k8s offers, so there's no
+# reason to skip it even for a single-app cluster like this.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argus

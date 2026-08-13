@@ -1,0 +1,65 @@
+# All four app Deployments share one shape: same image, config from the
+# ConfigMap + Secret via envFrom (so adding an env var later means editing the
+# ConfigMap, not four YAML files), and a readiness/liveness probe hitting the
+# same /health endpoint the compose healthcheck already used.
+#
+# `image: argus:dev` — the same tag `docker compose build` produces. On a real
+# cluster this would be a pushed, versioned image (`argus:v0.3.1`) pulled from
+# a registry; on kind, the image is loaded directly into the cluster's node
+# (see Makefile's `k8s-load` target), so `imagePullPolicy: Never` is required —
+# otherwise kubelet tries to pull "argus:dev" from Docker Hub and 404s.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat
+  namespace: argus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chat
+  template:
+    metadata:
+      labels:
+        app: chat
+    spec:
+      containers:
+        - name: chat
+          image: argus:dev
+          imagePullPolicy: Never
+          workingDir: /app/services
+          command: ["uvicorn", "chat_app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+# ClusterIP (the default) — reachable inside the cluster only. Ingress.yaml is
+# what exposes this to a browser outside the cluster; a Service alone never
+# does that on its own.
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat
+  namespace: argus
+spec:
+  selector:
+    app: chat
+  ports:
+    - port: 8000
+      targetPort: 8000

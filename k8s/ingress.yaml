@@ -1,0 +1,50 @@
+# Host-based routing, not path-based. A path rule like "/dashboard -> dashboard
+# Service" would need the dashboard app itself to know it's mounted under a
+# prefix (every internal link, redirect and static asset URL would need
+# rewriting) — none of these apps were built with that assumption, so faking
+# it at the Ingress layer would silently break navigation. Separate hostnames
+# route byte-for-byte the same requests these apps already handle at "/".
+#
+# Requires an Ingress controller actually running in the cluster — Ingress
+# objects are inert config without one. See k8s/README.md for the one-line
+# `kubectl apply` that installs ingress-nginx on a kind cluster.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argus
+  namespace: argus
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: chat.argus.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: chat
+                port:
+                  number: 8000
+    - host: ingestion.argus.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ingestion
+                port:
+                  number: 8001
+    - host: dashboard.argus.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 8002

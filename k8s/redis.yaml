@@ -1,0 +1,71 @@
+# Deployment, not StatefulSet — Redis here is a single instance with one
+# volume, and a Deployment + PVC covers that with less machinery. StatefulSet
+# earns its complexity when you need N stable, individually-addressable
+# replicas (a Redis cluster would); one instance doesn't need that.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redisdata
+  namespace: argus
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 512Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: argus
+spec:
+  replicas: 1
+  # A rolling update on a single-replica stateful-ish workload would try to
+  # bring up a second Pod before killing the first — impossible, since only
+  # one Pod can mount a ReadWriteOnce volume at a time. Recreate kills first,
+  # then starts the replacement.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: redisdata
+              mountPath: /data
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: redisdata
+          persistentVolumeClaim:
+            claimName: redisdata
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: argus
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

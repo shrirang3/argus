@@ -1,0 +1,30 @@
+# CPU-based, and worth being honest about why: the "correct" signal for this
+# worker is Redis stream *lag* (XLEN minus what the consumer group has acked)
+# — that's the number that actually says "behind." k8s's built-in HPA only
+# reads CPU/memory out of the box; a lag-based trigger needs an external
+# metrics adapter (KEDA is the standard choice, scaling straight off a Redis
+# Streams metric) which is real infra to stand up beyond what this brief asks
+# for. CPU is the honest simplification: consuming faster than messages arrive
+# does burn CPU, so it's a real, if indirect, proxy — not a fake one.
+#
+# minReplicas matches worker.yaml's baseline (2) so the HPA never fights the
+# Deployment's own replica count on a quiet cluster.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker
+  namespace: argus
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

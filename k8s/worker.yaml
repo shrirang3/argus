@@ -1,0 +1,59 @@
+# No Service block here — the worker only reads from Redis and writes to
+# Postgres, nothing calls it over HTTP, so there's nothing to route to it.
+#
+# Liveness has no /health endpoint to hit, so it reuses the same trick as the
+# compose healthcheck: the worker touches /tmp/argus-worker.alive on every
+# successful loop iteration, and the probe just checks that file's mtime is
+# recent. A stalled-but-still-running process (deadlocked, wedged on a bad
+# message) stops touching the file and gets killed — a plain "is the process
+# alive" check would never catch that.
+#
+# replicas: 2 as a baseline, not 1 — this is the Deployment the HPA (hpa.yaml)
+# scales, and starting above the floor exercises the consumer-group fan-out
+# (XAUTOCLAIM recovering a crashed replica's messages) even before the HPA
+# does anything.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: argus
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: argus:dev
+          imagePullPolicy: Never
+          workingDir: /app/services
+          command: ["python", "-m", "worker.main"]
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secrets
+          resources:
+            # HPA needs a request set to compute %CPU utilisation against —
+            # without this the "averageUtilization" target in hpa.yaml has no
+            # denominator and the HPA can't do its arithmetic.
+            requests:
+              cpu: 100m
+            limits:
+              cpu: 500m
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import os, sys, time
+                  p = "/tmp/argus-worker.alive"
+                  sys.exit(0 if os.path.exists(p) and time.time() - os.path.getmtime(p) < 60 else 1)
+            initialDelaySeconds: 15
+            periodSeconds: 10

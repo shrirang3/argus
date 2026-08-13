@@ -1,0 +1,53 @@
+# Same shape as chat.yaml — see that file's comments. Port 8002.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: argus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: argus:dev
+          imagePullPolicy: Never
+          workingDir: /app/services
+          command: ["uvicorn", "dashboard.main:app", "--host", "0.0.0.0", "--port", "8002"]
+          ports:
+            - containerPort: 8002
+          envFrom:
+            - configMapRef:
+                name: argus-config
+            - secretRef:
+                name: argus-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard
+  namespace: argus
+spec:
+  selector:
+    app: dashboard
+  ports:
+    - port: 8002
+      targetPort: 8002

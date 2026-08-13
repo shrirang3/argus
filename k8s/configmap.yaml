@@ -1,0 +1,24 @@
+# Non-secret config, shared by every service — the direct k8s equivalent of
+# compose's `x-service.environment` block. Split from Secret.yaml on one rule:
+# if it would be fine to `git commit` the value, it belongs here.
+#
+# Service hostnames use k8s DNS: "<service-name>.<namespace>.svc.cluster.local",
+# shortened to just "<service-name>" because Pods already resolve same-namespace
+# Services by short name. postgres.yaml / redis.yaml define the Services these
+# names resolve to.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argus-config
+  namespace: argus
+data:
+  DATABASE_URL: "postgresql+asyncpg://argus:argus@postgres:5432/argus"
+  REDIS_URL: "redis://redis:6379/0"
+  ARGUS_ENDPOINT: "http://ingestion:8001/v1/events"
+  STREAM_NAME: "llm.inference.v1"
+  CONSUMER_GROUP: "ingest-workers"
+  LOG_LEVEL: "INFO"
+  DEFAULT_PROVIDER: "mock"
+  ANSWER_MODEL: "llama-3.3-70b-versatile"
+  ROUTER_MODEL: "llama-3.1-8b-instant"
+  CEREBRAS_MODEL: "llama-3.3-70b"

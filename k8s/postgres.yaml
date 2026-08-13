@@ -1,0 +1,71 @@
+# StatefulSet, not Deployment. A Deployment's Pods are interchangeable and
+# disposable — exactly wrong for a database. A StatefulSet gives each Pod a
+# stable identity (postgres-0) and binds it to the *same* PersistentVolumeClaim
+# every time it's rescheduled, so a crashed-and-restarted Postgres comes back
+# to its own data directory, not an empty one. `volumeClaimTemplates` is what
+# makes that binding automatic — one PVC per replica, provisioned on first
+# creation and reused forever after.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: argus
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: argus-secrets
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+          # Same check compose uses — a TCP port answering isn't proof the DB
+          # will accept a real connection; pg_isready is proof.
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "argus", "-d", "argus"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "argus", "-d", "argus"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+# The Service a StatefulSet's Pods sit behind. `clusterIP: None` makes this
+# "headless" — instead of load-balancing (meaningless for one DB), it gives
+# DNS a direct record straight to the Pod. Other services still just connect
+# to "postgres:5432"; this is what makes that name resolve.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: argus
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
