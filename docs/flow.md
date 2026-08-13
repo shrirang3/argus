@@ -3,8 +3,8 @@
 Living document — describes what exists today, and marks what does not. Updated as each
 phase lands. Every number in here was measured, not estimated.
 
-**Current state:** the chat app and the SDK are complete. Events reach the ingestion
-service and stop there, in memory. Redis, the worker and the log tables are next.
+**Current state:** the pipeline runs end to end — chat → SDK → ingestion → Redis →
+worker → Postgres → dashboard. Multi-provider adapters, Kubernetes and the demo remain.
 
 ---
 
@@ -92,8 +92,6 @@ Branches off at ⑤, inside the Groq call, and never rejoins.
         └───────────────┬───────────────┘
                         │      XREADGROUP · group ingest-workers
                         │
-     ═══════════════════╪═══════════════════  everything below is P4 / P6
-                        │
                         ▼
         ┌───────────────────────────────┐
         │            worker             │
@@ -113,8 +111,9 @@ Branches off at ⑤, inside the Groq call, and never rejoins.
         └───────────────────────────────┘
 ```
 
-The P5 agent reads `inference_logs` back through its tools, which is what closes the
-demo loop: the chatbot answers questions about the telemetry its own answers produced.
+The dashboard reads `inference_logs` for exact percentiles over short windows and
+`inference_metrics_1m` for wider ones — see §4 for why that split is a correctness
+requirement rather than an optimisation.
 
 ### The one invariant
 
@@ -530,9 +529,9 @@ log. One mechanism, two requirements.
 | ✅ | ingestion — per-row validation, edge redaction, pricing, Redis publish | done |
 | ✅ | OTLP `/v1/traces` — foreign stacks feed the same pipeline | done |
 | ✅ | `inference_logs` (partitioned), `inference_metrics_1m`, `dead_letter_events` | tables built |
-| ⚪ | worker — drain the stream, dedupe, rollups | P4 |
-| ⚪ | Agent + telemetry tools | P5 |
-| ⚪ | Dashboard | P6 |
+| ✅ | worker — consumer group, dedupe, rollups | done |
+| ✅ | dashboard — latency, throughput, errors, cost, pipeline health | done |
+| ⚪ | Agent + telemetry tools | deferred — not asked for by the brief |
 | ⚪ | OpenAI / Cerebras adapters | P7 |
 | ⚪ | Kubernetes | P8 |
 

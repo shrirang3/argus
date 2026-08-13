@@ -1,4 +1,4 @@
-.PHONY: sync up down logs ps health migrate revision fmt lint test clean
+.PHONY: sync up down logs ps health migrate revision seed load fmt lint test clean
 
 # Host-side connection. In-network the services use postgres:5432; 5433 is
 # published to stay clear of a locally installed Postgres.
@@ -27,6 +27,13 @@ migrate:       ## apply migrations to the running database
 
 revision:      ## create a migration — make revision m="add conversations"
 	DATABASE_URL=$(DATABASE_URL_HOST) uv run alembic revision -m "$(m)"
+
+seed:          ## fill the dashboard with 30 minutes of synthetic traffic
+	uv run python tools/loadgen.py --events 800 --concurrency 20 --spread-minutes 30
+	uv run python tools/loadgen.py --events 200 --concurrency 20
+
+load:          ## sustained load against the pipeline (not a provider)
+	uv run python tools/loadgen.py --events 5000 --concurrency 50
 
 fmt:           ## format
 	uv run ruff format .

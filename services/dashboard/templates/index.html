@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Argus — dashboard</title>
+  <link rel="stylesheet" href="/static/dash.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#128065;</text></svg>">
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">argus</span>
+      <span class="brand-sub">inference telemetry</span>
+    </div>
+
+    <div class="controls">
+      <div class="window-picker" id="window-picker" role="group" aria-label="Time window">
+        <button data-window="5">5m</button>
+        <button data-window="15" class="active">15m</button>
+        <button data-window="60">1h</button>
+        <button data-window="360">6h</button>
+        <button data-window="1440">24h</button>
+      </div>
+      <span class="source-note" id="source-note"></span>
+      <a class="foot-link" href="http://localhost:8000" target="_blank" rel="noreferrer">chat ↗</a>
+      <span class="updated" id="updated">—</span>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <!-- headline numbers -->
+    <section class="tiles" id="tiles">
+      <div class="tile"><span class="tile-label">calls</span><span class="tile-value" id="t-calls">—</span><span class="tile-sub" id="t-rpm"></span></div>
+      <div class="tile"><span class="tile-label">p50 latency</span><span class="tile-value" id="t-p50">—</span><span class="tile-sub">ms</span></div>
+      <div class="tile"><span class="tile-label">p95 latency</span><span class="tile-value" id="t-p95">—</span><span class="tile-sub">ms</span></div>
+      <div class="tile accent"><span class="tile-label">p99 latency</span><span class="tile-value" id="t-p99">—</span><span class="tile-sub">ms</span></div>
+      <div class="tile"><span class="tile-label">p50 TTFT</span><span class="tile-value" id="t-ttft">—</span><span class="tile-sub">ms · streamed</span></div>
+      <div class="tile"><span class="tile-label">error rate</span><span class="tile-value" id="t-err">—</span><span class="tile-sub" id="t-err-sub"></span></div>
+      <div class="tile"><span class="tile-label">tokens</span><span class="tile-value" id="t-tokens">—</span><span class="tile-sub">in + out</span></div>
+      <div class="tile"><span class="tile-label">cost</span><span class="tile-value" id="t-cost">—</span><span class="tile-sub" id="t-unpriced">USD</span></div>
+    </section>
+
+    <!-- charts -->
+    <section class="grid">
+      <div class="card wide">
+        <div class="card-head">
+          <h2>Latency over time</h2>
+          <span class="card-note" id="latency-note"></span>
+        </div>
+        <div class="chart"><canvas id="chart-latency"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Throughput</h2><span class="card-note">per minute</span></div>
+        <div class="chart"><canvas id="chart-throughput"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Success vs failure</h2><span class="card-note">per minute</span></div>
+        <div class="chart"><canvas id="chart-errors"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Cost by model</h2><span class="card-note">USD</span></div>
+        <div class="chart"><canvas id="chart-cost"></canvas></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Models</h2><span class="card-note">calls · p95 · failures</span></div>
+        <div class="table-wrap"><table id="table-models"><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- pipeline health -->
+    <section class="card wide">
+      <div class="card-head">
+        <h2>Pipeline health</h2>
+        <span class="card-note">an observability tool that hides its own losses is not one</span>
+      </div>
+      <div class="pipeline" id="pipeline"></div>
+    </section>
+
+    <!-- errors -->
+    <section class="card wide">
+      <div class="card-head"><h2>Failures</h2><span class="card-note" id="errors-note"></span></div>
+      <div class="table-wrap"><table id="table-errors"><tbody></tbody></table></div>
+    </section>
+
+    <!-- recent -->
+    <section class="card wide">
+      <div class="card-head"><h2>Recent inferences</h2><span class="card-note">previews are redacted</span></div>
+      <div class="table-wrap"><table id="table-recent"><tbody></tbody></table></div>
+    </section>
+
+  </main>
+
+  <script src="/static/chart.min.js"></script>
+  <script src="/static/dash.js" defer></script>
+</body>
+</html>

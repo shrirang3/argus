@@ -8,7 +8,6 @@
   <img alt="Python" src="https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white">
   <img alt="uv" src="https://img.shields.io/badge/uv-workspace-DE5FE9?logo=uv&logoColor=white">
   <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white">
-  <img alt="LangGraph" src="https://img.shields.io/badge/LangGraph-1C3C3C?logo=langchain&logoColor=white">
   <img alt="Postgres" src="https://img.shields.io/badge/Postgres-4169E1?logo=postgresql&logoColor=white">
   <img alt="Redis" src="https://img.shields.io/badge/Redis%20Streams-DC382D?logo=redis&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white">
@@ -24,9 +23,10 @@ off-process without ever blocking the request path.
 It ships with a chatbot that gives it something worth watching: an assistant that
 answers questions about **its own inference telemetry**.
 
-> **Status — the chat app is live; the pipeline is next.** Streaming, persistence,
-> conversation list / resume / cancel and a Groq provider all work today
-> ([P1](#roadmap)). The SDK, ingestion, worker and dashboard are still ahead.
+> **Status — the pipeline is complete end to end.** A chat message is captured by the
+> SDK, validated and priced at the edge, queued through Redis, written to Postgres by a
+> worker, and charted on the dashboard — with nothing in the request path waiting on any
+> of it. Multi-provider, Kubernetes and the demo are what remain.
 
 <br>
 
@@ -43,7 +43,7 @@ resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=
 ```
 
 Because instrumentation patches the provider client itself, it also captures calls made
-by code you don't own — inside LangGraph, inside a library, inside a background job.
+by code you don't own — inside a framework, a library, or a background job.
 
 <br>
 
@@ -54,7 +54,7 @@ by code you don't own — inside LangGraph, inside a library, inside a backgroun
       │  SSE, cancellable
       ▼
  ┌──────────┐        ┌────────────┐
- │ chat-app │───────►│  provider  │        LangGraph: route → tools → answer
+ │ chat-app │───────►│  provider  │
  └────┬─────┘        └─────▲──────┘
       │                    │  intercepted, transparently
       │              ┌─────┴──────┐
@@ -97,16 +97,17 @@ retry, then buffer, then spill to disk. Chat keeps serving.
 
 ```
 packages/argus/      the SDK — app-agnostic, installable
-services/chat_app/   chat UI + LangGraph agent
+services/chat_app/   chat UI, provider adapters
 services/ingestion/  log receiver
 services/worker/     stream consumer
 services/dashboard/  metrics UI
+tools/               synthetic load generator
 db/                  schema + migrations
 k8s/                 deployment manifests
 ```
 
-The platform is domain-agnostic. The use case lives in exactly two files —
-`services/chat_app/tools.py` and `prompts.py`. Swap them, get a different product.
+The platform is domain-agnostic — the SDK, ingestion, worker and schema know nothing
+about chat. `services/chat_app/` is the only part that does.
 
 <br>
 
@@ -142,6 +143,7 @@ uv sync --all-packages     # resolve the workspace
 make up                    # postgres, redis, all four services
 make migrate               # apply the schema
 make health                # every service should answer ok
+make seed                  # optional: synthetic traffic so the dashboard has data
 ```
 
 Open **http://localhost:8000** and start a conversation.
@@ -184,12 +186,12 @@ pipeline.
 |---|---|---|
 | **P0** | Repo skeleton · uv workspace · compose | 🟢 done |
 | **P1** | Chat app — streaming, persistence, list / resume / cancel | 🟢 done |
-| **P2** | `argus` SDK — auto-instrumentation | ⚪ todo |
-| **P3** | Ingestion — validate, redact, publish | ⚪ todo |
-| **P4** | Worker — idempotent writes, rollups | ⚪ todo |
-| **P5** | Agent — LangGraph route / tools / answer | ⚪ todo |
-| **P6** | Dashboard — latency, throughput, errors, cost | ⚪ todo |
-| **P7** | Multi-provider — OpenAI, Anthropic | ⚪ todo |
+| **P2** | `argus` SDK — auto-instrumentation | 🟢 done |
+| **P3** | Ingestion — validate, redact, price, publish | 🟢 done |
+| **P4** | Worker — consumer group, dedupe, rollups | 🟢 done |
+| **P5** | Agent — telemetry tools over the same data | ⚪ deferred, not required by the brief |
+| **P6** | Dashboard — latency, throughput, errors, cost | 🟢 done |
+| **P7** | Multi-provider — OpenAI, Cerebras | ⚪ todo |
 | **P8** | Kubernetes — self-hosted deploy | ⚪ todo |
 | **P9** | Docs + demo | ⚪ todo |
 
@@ -201,7 +203,7 @@ Full design, decisions, and tradeoffs: [`plan/PLAN.md`](plan/PLAN.md).
 
 ## Stack
 
-`Python 3.12+` · `FastAPI` · `SQLAlchemy` · `Alembic` · `LangGraph` · `Groq` · `Postgres`
+`Python 3.12+` · `FastAPI` · `SQLAlchemy` · `Alembic` · `Groq` · `Postgres`
 · `Redis Streams` · `uv` · `Docker` · `Kubernetes`
 
 Frontend is Jinja2, hand-written CSS and vanilla JS — no npm, no bundler, no CDN.
