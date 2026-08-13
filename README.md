@@ -27,7 +27,9 @@ answers questions about **its own inference telemetry**.
 > SDK, validated and priced at the edge, queued through Redis, written to Postgres by a
 > worker, and charted on the dashboard — with nothing in the request path waiting on any
 > of it. Groq and Cerebras are both wired — open-weight models only, pinned per
-> conversation. Kubernetes and the demo are what remain.
+> conversation. Runs on Kubernetes too — namespace, Deployments, a StatefulSet
+> for Postgres, host-routed Ingress, HPA on the worker — verified live on a
+> local `kind` cluster. The demo is what remains.
 
 <br>
 
@@ -210,11 +212,13 @@ pipeline.
 | **P5** | Agent — telemetry tools over the same data | ⚪ deferred, not required by the brief |
 | **P6** | Dashboard — latency, throughput, errors, cost | 🟢 done |
 | **P7** | Multi-provider — Groq + Cerebras, open-weight models only, per-conversation pin | 🟢 done |
-| **P8** | Kubernetes — self-hosted deploy | ⚪ todo |
+| **P8** | Kubernetes — self-hosted deploy | 🟢 done |
 | **P9** | Docs + demo | ⚪ todo |
 
 Architecture, data formats at every hop, API and table reference:
 [`docs/flow.md`](docs/flow.md).
+Docker and Kubernetes — images, objects, why each manifest is shaped the way
+it is: [`docs/devops.md`](docs/devops.md).
 Full design, decisions, and tradeoffs: [`plan/PLAN.md`](plan/PLAN.md).
 
 <br>
