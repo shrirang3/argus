@@ -24,85 +24,9 @@ off-process without ever blocking the request path.
 It ships with a chatbot that gives it something worth watching: an assistant that
 answers questions about **its own inference telemetry**.
 
-> **Status — the pipeline is complete end to end.** A chat message is captured by the
-> SDK, validated and priced at the edge, queued through Redis, written to Postgres by a
-> worker, and charted on the dashboard — with nothing in the request path waiting on any
-> of it. Groq and Cerebras are both wired — open-weight models only, pinned per
-> conversation. Runs on Kubernetes too — namespace, Deployments, a StatefulSet
-> for Postgres, host-routed Ingress, HPA on the worker — verified live on a
-> local `kind` cluster, with real Groq inference end to end and the dashboard populated
-> by synthetic load.
-
 <br>
 
-## Building it
-
-```bash
-uv sync --all-packages                       # resolve the workspace
-docker build -t argus:dev .                  # one image, all four services
-kind create cluster --name argus --config k8s/kind-config.yaml
-kind load docker-image argus:dev --name argus
-kubectl apply -k k8s/                        # namespace → config → data layer → services → HPA → ingress
-DATABASE_URL=postgresql+asyncpg://argus:argus@localhost:5433/argus uv run alembic upgrade head
-```
-
-Full manual runbook, including the ingress controller and metrics-server one-time setup:
-[`k8s/README.md`](k8s/README.md). Live evidence from an actual run of the above —
-pod status, screenshots, a real Groq call traced input → output → DB row — is in
-[`output/`](output/README.md), not asserted here.
-
-### What that run actually produced
-
-Pods, from `kubectl get pods,deploy,hpa -n argus`:
-
-| Component | Replicas | Status | Notes |
-|---|---|---|---|
-| chat | 1/1 | Running | streams tokens over SSE, calls provider directly |
-| ingestion | 1/1 | Running | validate → redact → price → `XADD` |
-| worker | 2 (HPA: 2–6) | Running | consumer group, scales to 3 on manual trigger inside a `kind` node with 4 vCPU allotted |
-| postgres | 1/1 (StatefulSet) | Running | |
-| redis | 1/1 | Running | Streams + dead-letter list |
-| dashboard | 1/1 | Running | reads the 1-minute rollup table |
-
-Pipeline health, from `GET /api/pipeline` after a mixed real + synthetic run:
-
-| Metric | Value |
-|---|---|
-| Events accepted at ingestion | 6,002 / 6,002 (0 rejected) |
-| Redis Stream length | 6,002 |
-| Stream lag | 0 |
-| Pending (unacked) | 0 |
-| Active consumers | 5 |
-| Dead letters | 0 |
-
-End-to-end latency and cost, from `GET /api/overview` (60-minute rollup window):
-
-| Metric | Value |
-|---|---|
-| Total calls | 6,002 |
-| p50 / p95 / p99 latency | 288ms / 1,180ms / 1,765ms |
-| p50 / p95 TTFT | 135ms / 685ms |
-| Error rate | 9.36% (562 failures — includes a deliberate synthetic error/timeout/rate-limit tail) |
-| Tokens processed | 3,713,383 |
-| Cost | $1.027733 |
-| Throughput | 100.03 calls/min sustained |
-
-By model, from `GET /api/models`:
-
-| Provider | Model | Calls | Avg latency | p95 latency | Failures |
-|---|---|---|---|---|---|
-| groq | llama-3.1-8b-instant | 2,651 | 199ms | 374ms | 243 |
-| groq | llama-3.3-70b-versatile | 1,827 | 584ms | 1,111ms | 170 |
-| groq | openai/gpt-oss-120b | 907 | 968ms | 1,798ms | 84 |
-| mock | mock-1 | 617 | 133ms | 255ms | 65 |
-
-One real (non-synthetic) Groq call traced end to end: 45 prompt tokens in, 38 tokens out,
-442ms, landed as `inference_logs.id=6102` with `status=success` — full input/output pair
-in [`output/`](output/README.md).
-
-<br>
-
-## One line
+## Architecture
 
 ```python
 import argus
@@ -114,12 +38,8 @@ argus.init(endpoint="http://ingestion:8001/v1/events", service="chat-app")
 resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=msgs)
 ```
 
-Because instrumentation patches the provider client itself, it also captures calls made
-by code you don't own — inside a framework, a library, or a background job.
-
-<br>
-
-## How it flows
+Instrumentation patches the provider client class itself, so it also captures calls
+made by code you don't own — inside a framework, a library, or a background job.
 
 ```
    browser
@@ -150,9 +70,7 @@ by code you don't own — inside a framework, a library, or a background job.
 **The invariant:** the chat path never awaits the logging path. Ingestion down? Events
 retry, then buffer, then spill to disk. Chat keeps serving.
 
-<br>
-
-## Design notes
+**Design notes:**
 
 | | |
 |---|---|
@@ -163,9 +81,7 @@ retry, then buffer, then spill to disk. Chat keeps serving.
 | **OTel-shaped** | Wire fields follow OpenTelemetry GenAI conventions, so any OTel-emitting stack feeds the same pipeline. |
 | **PII redaction** | Applied in the SDK *before* the event leaves the process, then again at the ingestion edge. |
 
-<br>
-
-## Layout
+**Layout:**
 
 ```
 packages/argus/      the SDK — app-agnostic, installable
@@ -181,9 +97,7 @@ k8s/                 deployment manifests
 The platform is domain-agnostic — the SDK, ingestion, worker and schema know nothing
 about chat. `services/chat_app/` is the only part that does.
 
-<br>
-
-## Data model
+**Data model:**
 
 ```
 conversations ──1:N──► messages
@@ -191,8 +105,6 @@ conversations ──1:N──► messages
    message_count          role        user | assistant | system | tool
    updated_at             truncated   set when a stream was cancelled
 ```
-
-Two decisions worth knowing before reading the schema:
 
 **Conversations are soft-deleted.** Inference logs reference them, and analytics should
 survive a user clearing their sidebar. A partial index — `WHERE status <> 'deleted'` —
@@ -203,9 +115,16 @@ transaction share a `now()`, so timestamp ties are broken arbitrarily by the pla
 unique constraint on `(conversation_id, seq)` makes gaps and duplicates impossible
 rather than merely unlikely.
 
+System design, scaling and failure assumptions: [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Data formats at every hop, API and table reference: [`docs/flow.md`](docs/flow.md).
+Docker and Kubernetes, manifest by manifest: [`docs/devops.md`](docs/devops.md).
+Full design, decisions, and tradeoffs: [`plan/PLAN.md`](plan/PLAN.md).
+
 <br>
 
-## Quickstart
+## Setup
+
+### Docker Compose
 
 Requires [uv](https://docs.astral.sh/uv/) and Docker.
 
@@ -231,8 +150,21 @@ Open **http://localhost:8000** and start a conversation.
 Inside the compose network the services still use `postgres:5432` and `redis:6379`;
 only the published host ports are remapped.
 
-Runs on Kubernetes too — full manual runbook in [`k8s/README.md`](k8s/README.md)
-(`kind create cluster` → build → load → `kubectl apply -k k8s/`).
+### Kubernetes (kind)
+
+```bash
+uv sync --all-packages
+docker build -t argus:dev .                                     # one image, all four services
+kind create cluster --name argus --config k8s/kind-config.yaml
+kind load docker-image argus:dev --name argus
+kubectl apply -k k8s/                                            # namespace → config → data layer → services → HPA → ingress
+DATABASE_URL=postgresql+asyncpg://argus:argus@localhost:5433/argus uv run alembic upgrade head
+```
+
+Full manual runbook, including the one-time ingress controller and metrics-server setup:
+[`k8s/README.md`](k8s/README.md). Live evidence from an actual run of the above —
+pod status, screenshots, a real Groq call traced input → output → DB row — is in
+[`output/`](output/README.md).
 
 ### Providers
 
@@ -272,40 +204,70 @@ pipeline.
 
 <br>
 
+## Results
+
+From a live run on the Kubernetes setup above — pods, from
+`kubectl get pods,deploy,hpa -n argus`:
+
+| Component | Replicas | Status | Notes |
+|---|---|---|---|
+| chat | 1/1 | Running | streams tokens over SSE, calls provider directly |
+| ingestion | 1/1 | Running | validate → redact → price → `XADD` |
+| worker | 2 (HPA: 2–6) | Running | consumer group, scales to 3 on manual trigger inside a `kind` node with 4 vCPU allotted |
+| postgres | 1/1 (StatefulSet) | Running | |
+| redis | 1/1 | Running | Streams + dead-letter list |
+| dashboard | 1/1 | Running | reads the 1-minute rollup table |
+
+End-to-end latency and cost, from `GET /api/overview` (60-minute rollup window, mixed
+real + synthetic traffic):
+
+| Metric | Value |
+|---|---|
+| Total calls | 6,002 |
+| p50 / p95 / p99 latency | 288ms / 1,180ms / 1,765ms |
+| p50 / p95 TTFT | 135ms / 685ms |
+| Error rate | 9.36% (562 failures — includes a deliberate synthetic error/timeout/rate-limit tail) |
+| Tokens processed | 3,713,383 |
+| Cost | $1.027733 |
+| Throughput | 100.03 calls/min sustained |
+
+By model, from `GET /api/models`:
+
+| Provider | Model | Calls | Avg latency | p95 latency | Failures |
+|---|---|---|---|---|---|
+| groq | llama-3.1-8b-instant | 2,651 | 199ms | 374ms | 243 |
+| groq | llama-3.3-70b-versatile | 1,827 | 584ms | 1,111ms | 170 |
+| groq | openai/gpt-oss-120b | 907 | 968ms | 1,798ms | 84 |
+| mock | mock-1 | 617 | 133ms | 255ms | 65 |
+
+One real (non-synthetic) Groq call traced end to end: 45 prompt tokens in, 38 tokens out,
+442ms, landed as `inference_logs.id=6102` with `status=success` — full input/output pair,
+screenshots, and raw JSON for every panel above: [`output/`](output/README.md).
+
+<br>
+
 ## Using Claude to build and maintain this
 
-This repo was built with Claude Code, and stays operable through three project skills
-in [`.claude/skills/`](.claude/skills/) rather than one-off manual checks:
+This repo was built with Claude Code, and stays operable through project skills in
+[`.claude/skills/`](.claude/skills/) rather than one-off manual checks:
 
 | Skill | What it does |
 |---|---|
 | [`health-check`](.claude/skills/health-check/SKILL.md) | Sweeps pods, deployments, HPA, every service's `/health`, and Redis Stream lag/pending/dead-letters into one pass/fail table — the thing to run after any deploy or restart |
 | [`usage-report`](.claude/skills/usage-report/SKILL.md) | Pulls real usage out of the dashboard + Postgres — top models by cost/volume, top conversations by token spend, error breakdown — ranked tables, not vibes |
 | [`gen-tests`](.claude/skills/gen-tests/SKILL.md) | Reads the target code and an existing test file's conventions first, lists every branch (happy path + each error/boundary), writes one test per behavior, then actually runs them before reporting done |
+| [`explain-changes`](.claude/skills/explain-changes/SKILL.md) | Turns every code change into an API inventory + edit-by-edit walkthrough — the repo doubles as interview prep, so unexplained code is unusable for that purpose |
 
 `gen-tests` exists because generated tests are only as good as the branches someone
 thought to ask for — the skill forces branch enumeration (dedup on `event_id`,
 double-layer PII redaction, the non-blocking SDK guarantee, `seq` uniqueness under
 concurrent writes) as a step the model can't skip, rather than trusting a single
 "write tests for this file" prompt to surface them. Every generated test gets run,
-not just written — a failing assertion here means the code has a real bug or the
-test's assumption is wrong, and the skill requires saying which before moving on.
-
-[`explain-changes`](.claude/skills/explain-changes/SKILL.md) is the fourth, older skill
-in this set — it turns every code change into an API inventory + edit-by-edit
-walkthrough, because the repo doubles as interview prep and unexplained code is
-unusable for that purpose.
+not just written — a failing assertion means the code has a real bug or the test's
+assumption is wrong, and the skill requires saying which before moving on.
 
 Build history and phase-by-phase status live in `docs/roadmap.md` (gitignored — a
-build log, not part of the deliverable). What matters here is the result, above.
-
-System design, ingestion flow, scaling and failure assumptions:
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
-Data formats at every hop, API and table reference:
-[`docs/flow.md`](docs/flow.md).
-Docker and Kubernetes — images, objects, why each manifest is shaped the way
-it is: [`docs/devops.md`](docs/devops.md).
-Full design, decisions, and tradeoffs: [`plan/PLAN.md`](plan/PLAN.md).
+build log, not part of the deliverable).
 
 <br>
 
