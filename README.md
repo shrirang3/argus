@@ -31,7 +31,74 @@ answers questions about **its own inference telemetry**.
 > conversation. Runs on Kubernetes too — namespace, Deployments, a StatefulSet
 > for Postgres, host-routed Ingress, HPA on the worker — verified live on a
 > local `kind` cluster, with real Groq inference end to end and the dashboard populated
-> by synthetic load. Nothing remains.
+> by synthetic load.
+
+<br>
+
+## Building it
+
+```bash
+uv sync --all-packages                       # resolve the workspace
+docker build -t argus:dev .                  # one image, all four services
+kind create cluster --name argus --config k8s/kind-config.yaml
+kind load docker-image argus:dev --name argus
+kubectl apply -k k8s/                        # namespace → config → data layer → services → HPA → ingress
+DATABASE_URL=postgresql+asyncpg://argus:argus@localhost:5433/argus uv run alembic upgrade head
+```
+
+Full manual runbook, including the ingress controller and metrics-server one-time setup:
+[`k8s/README.md`](k8s/README.md). Live evidence from an actual run of the above —
+pod status, screenshots, a real Groq call traced input → output → DB row — is in
+[`output/`](output/README.md), not asserted here.
+
+### What that run actually produced
+
+Pods, from `kubectl get pods,deploy,hpa -n argus`:
+
+| Component | Replicas | Status | Notes |
+|---|---|---|---|
+| chat | 1/1 | Running | streams tokens over SSE, calls provider directly |
+| ingestion | 1/1 | Running | validate → redact → price → `XADD` |
+| worker | 2 (HPA: 2–6) | Running | consumer group, scales to 3 on manual trigger inside a `kind` node with 4 vCPU allotted |
+| postgres | 1/1 (StatefulSet) | Running | |
+| redis | 1/1 | Running | Streams + dead-letter list |
+| dashboard | 1/1 | Running | reads the 1-minute rollup table |
+
+Pipeline health, from `GET /api/pipeline` after a mixed real + synthetic run:
+
+| Metric | Value |
+|---|---|
+| Events accepted at ingestion | 6,002 / 6,002 (0 rejected) |
+| Redis Stream length | 6,002 |
+| Stream lag | 0 |
+| Pending (unacked) | 0 |
+| Active consumers | 5 |
+| Dead letters | 0 |
+
+End-to-end latency and cost, from `GET /api/overview` (60-minute rollup window):
+
+| Metric | Value |
+|---|---|
+| Total calls | 6,002 |
+| p50 / p95 / p99 latency | 288ms / 1,180ms / 1,765ms |
+| p50 / p95 TTFT | 135ms / 685ms |
+| Error rate | 9.36% (562 failures — includes a deliberate synthetic error/timeout/rate-limit tail) |
+| Tokens processed | 3,713,383 |
+| Cost | $1.027733 |
+| Throughput | 100.03 calls/min sustained |
+
+By model, from `GET /api/models`:
+
+| Provider | Model | Calls | Avg latency | p95 latency | Failures |
+|---|---|---|---|---|---|
+| groq | llama-3.1-8b-instant | 2,651 | 199ms | 374ms | 243 |
+| groq | llama-3.3-70b-versatile | 1,827 | 584ms | 1,111ms | 170 |
+| groq | openai/gpt-oss-120b | 907 | 968ms | 1,798ms | 84 |
+| mock | mock-1 | 617 | 133ms | 255ms | 65 |
+
+One real (non-synthetic) Groq call traced end to end: 45 prompt tokens in, 38 tokens out,
+442ms, landed as `inference_logs.id=6102` with `status=success` — full input/output pair
+in [`output/`](output/README.md).
 
 <br>
 
@@ -205,24 +272,32 @@ pipeline.
 
 <br>
 
-## Roadmap
+## Using Claude to build and maintain this
 
-| | Phase | Status |
-|---|---|---|
-| **P0** | Repo skeleton · uv workspace · compose | 🟢 done |
-| **P1** | Chat app — streaming, persistence, list / resume / cancel | 🟢 done |
-| **P2** | `argus` SDK — auto-instrumentation | 🟢 done |
-| **P3** | Ingestion — validate, redact, price, publish | 🟢 done |
-| **P4** | Worker — consumer group, dedupe, rollups | 🟢 done |
-| **P5** | Agent — telemetry tools over the same data | ⚪ deferred, not required by the brief |
-| **P6** | Dashboard — latency, throughput, errors, cost | 🟢 done |
-| **P7** | Multi-provider — Groq + Cerebras, open-weight models only, per-conversation pin | 🟢 done |
-| **P8** | Kubernetes — self-hosted deploy | 🟢 done |
-| **P9** | Docs + demo | 🟢 done |
+This repo was built with Claude Code, and stays operable through three project skills
+in [`.claude/skills/`](.claude/skills/) rather than one-off manual checks:
 
-**Live run evidence** — pod status, dashboard + chat screenshots, a real Groq
-call traced input → SSE stream → `inference_logs` row, and every dashboard
-panel's raw JSON: [`output/`](output/README.md).
+| Skill | What it does |
+|---|---|
+| [`health-check`](.claude/skills/health-check/SKILL.md) | Sweeps pods, deployments, HPA, every service's `/health`, and Redis Stream lag/pending/dead-letters into one pass/fail table — the thing to run after any deploy or restart |
+| [`usage-report`](.claude/skills/usage-report/SKILL.md) | Pulls real usage out of the dashboard + Postgres — top models by cost/volume, top conversations by token spend, error breakdown — ranked tables, not vibes |
+| [`gen-tests`](.claude/skills/gen-tests/SKILL.md) | Reads the target code and an existing test file's conventions first, lists every branch (happy path + each error/boundary), writes one test per behavior, then actually runs them before reporting done |
+
+`gen-tests` exists because generated tests are only as good as the branches someone
+thought to ask for — the skill forces branch enumeration (dedup on `event_id`,
+double-layer PII redaction, the non-blocking SDK guarantee, `seq` uniqueness under
+concurrent writes) as a step the model can't skip, rather than trusting a single
+"write tests for this file" prompt to surface them. Every generated test gets run,
+not just written — a failing assertion here means the code has a real bug or the
+test's assumption is wrong, and the skill requires saying which before moving on.
+
+[`explain-changes`](.claude/skills/explain-changes/SKILL.md) is the fourth, older skill
+in this set — it turns every code change into an API inventory + edit-by-edit
+walkthrough, because the repo doubles as interview prep and unexplained code is
+unusable for that purpose.
+
+Build history and phase-by-phase status live in `docs/roadmap.md` (gitignored — a
+build log, not part of the deliverable). What matters here is the result, above.
 
 System design, ingestion flow, scaling and failure assumptions:
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
