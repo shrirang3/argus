@@ -11,6 +11,7 @@
   <img alt="Postgres" src="https://img.shields.io/badge/Postgres-4169E1?logo=postgresql&logoColor=white">
   <img alt="Redis" src="https://img.shields.io/badge/Redis%20Streams-DC382D?logo=redis&logoColor=white">
   <img alt="Docker" src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white">
+  <img alt="Kubernetes" src="https://img.shields.io/badge/Kubernetes-326CE5?logo=kubernetes&logoColor=white">
 </p>
 
 ---
@@ -162,6 +163,9 @@ Open **http://localhost:8000** and start a conversation.
 Inside the compose network the services still use `postgres:5432` and `redis:6379`;
 only the published host ports are remapped.
 
+Runs on Kubernetes too — full manual runbook in [`k8s/README.md`](k8s/README.md)
+(`kind create cluster` → build → load → `kubectl apply -k k8s/`).
+
 ### Providers
 
 The stack ships with a **mock provider as the default**, so it runs with no credentials
@@ -215,7 +219,9 @@ pipeline.
 | **P8** | Kubernetes — self-hosted deploy | 🟢 done |
 | **P9** | Docs + demo | ⚪ todo |
 
-Architecture, data formats at every hop, API and table reference:
+System design, ingestion flow, scaling and failure assumptions:
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
+Data formats at every hop, API and table reference:
 [`docs/flow.md`](docs/flow.md).
 Docker and Kubernetes — images, objects, why each manifest is shaped the way
 it is: [`docs/devops.md`](docs/devops.md).
