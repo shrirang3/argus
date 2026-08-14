@@ -220,6 +220,10 @@ pipeline.
 | **P8** | Kubernetes — self-hosted deploy | 🟢 done |
 | **P9** | Docs + demo | 🟢 done |
 
+**Live run evidence** — pod status, dashboard + chat screenshots, a real Groq
+call traced input → SSE stream → `inference_logs` row, and every dashboard
+panel's raw JSON: [`output/`](output/README.md).
+
 System design, ingestion flow, scaling and failure assumptions:
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
 Data formats at every hop, API and table reference:

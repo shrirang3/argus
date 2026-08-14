@@ -1,0 +1,19 @@
+{
+    "calls": 6002,
+    "failures": 562,
+    "rate_limited": 169,
+    "cancelled": 116,
+    "tokens": 3713383,
+    "cost_usd": 1.027733,
+    "unpriced": 446,
+    "avg_ms": 426,
+    "p50_ms": 288,
+    "p95_ms": 1180,
+    "p99_ms": 1765,
+    "p50_ttft_ms": 135,
+    "p95_ttft_ms": 685,
+    "error_rate_pct": 9.36,
+    "calls_per_min": 100.03,
+    "window_minutes": 60,
+    "series_source": "rollup"
+}

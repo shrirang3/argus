@@ -1,0 +1,40 @@
+NAME                         READY   STATUS    RESTARTS   AGE     IP            NODE                  NOMINATED NODE   READINESS GATES
+chat-78bff754f-4lx2t         1/1     Running   0          8m8s    10.244.0.19   argus-control-plane   <none>           <none>
+dashboard-564cc44dfd-g9xrp   1/1     Running   0          18m     10.244.0.11   argus-control-plane   <none>           <none>
+ingestion-c9c6546c8-57ft9    1/1     Running   0          18m     10.244.0.12   argus-control-plane   <none>           <none>
+postgres-0                   1/1     Running   0          18m     10.244.0.18   argus-control-plane   <none>           <none>
+redis-58979dd564-854ts       1/1     Running   0          18m     10.244.0.17   argus-control-plane   <none>           <none>
+worker-6d5d7d9cc-lhzk2       1/1     Running   0          8m7s    10.244.0.21   argus-control-plane   <none>           <none>
+worker-6d5d7d9cc-qn5pg       1/1     Running   0          4m46s   10.244.0.22   argus-control-plane   <none>           <none>
+worker-6d5d7d9cc-sfhrv       1/1     Running   0          8m8s    10.244.0.20   argus-control-plane   <none>           <none>
+NAME                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)    AGE   SELECTOR
+service/chat        ClusterIP   10.96.8.238     <none>        8000/TCP   18m   app=chat
+service/dashboard   ClusterIP   10.96.241.104   <none>        8002/TCP   18m   app=dashboard
+service/ingestion   ClusterIP   10.96.239.238   <none>        8001/TCP   18m   app=ingestion
+service/postgres    ClusterIP   None            <none>        5432/TCP   18m   app=postgres
+service/redis       ClusterIP   10.96.157.254   <none>        6379/TCP   18m   app=redis
+
+NAME                        READY   UP-TO-DATE   AVAILABLE   AGE   CONTAINERS   IMAGES           SELECTOR
+deployment.apps/chat        1/1     1            1           18m   chat         argus:dev        app=chat
+deployment.apps/dashboard   1/1     1            1           18m   dashboard    argus:dev        app=dashboard
+deployment.apps/ingestion   1/1     1            1           18m   ingestion    argus:dev        app=ingestion
+deployment.apps/redis       1/1     1            1           18m   redis        redis:7-alpine   app=redis
+deployment.apps/worker      3/3     3            3           18m   worker       argus:dev        app=worker
+
+NAME                                         REFERENCE           TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+horizontalpodautoscaler.autoscaling/worker   Deployment/worker   cpu: 3%/70%   2         6         3          18m
+
+NAME                              CLASS   HOSTS                                                          ADDRESS     PORTS   AGE
+ingress.networking.k8s.io/argus   nginx   chat.argus.local,ingestion.argus.local,dashboard.argus.local   localhost   80      18m
+NAME     REFERENCE           TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+worker   Deployment/worker   cpu: 3%/70%   2         6         3          18m
+---
+NAME                         CPU(cores)   MEMORY(bytes)   
+chat-78bff754f-4lx2t         5m           103Mi           
+dashboard-564cc44dfd-g9xrp   11m          63Mi            
+ingestion-c9c6546c8-57ft9    3m           65Mi            
+postgres-0                   13m          60Mi            
+redis-58979dd564-854ts       12m          15Mi            
+worker-6d5d7d9cc-lhzk2       4m           49Mi            
+worker-6d5d7d9cc-qn5pg       4m           45Mi            
+worker-6d5d7d9cc-sfhrv       5m           47Mi            

@@ -1,0 +1,1 @@
+{"sdk":{"emitted":2,"sent":2,"dropped":0,"spilled":0,"send_failures":0},"sdk_reachable":true,"ingest_counts":{"accepted":6002,"rejected":0,"published":6002},"ingest_reachable":true,"stream":{"name":"llm.inference.v1","length":6002,"lag":0,"pending":0,"consumers":5},"dead_letters":{"total":0,"rows":[]}}

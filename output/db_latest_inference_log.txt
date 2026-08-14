@@ -1,0 +1,11 @@
+-[ RECORD 1 ]---+-------------------------------------
+id              | 6102
+conversation_id | 5991d64e-0c6d-4cf9-85db-fb90395f93a2
+provider        | groq
+model           | llama-3.3-70b-versatile
+total_tokens    | 83
+prompt_tokens   | 45
+latency_ms      | 442
+status          | success
+started_at      | 2026-08-14 15:30:28.294829+00
+

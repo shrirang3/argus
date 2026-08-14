@@ -1,0 +1,114 @@
+event: token
+data: {"text": "Arg"}
+
+event: token
+data: {"text": "us"}
+
+event: token
+data: {"text": " is"}
+
+event: token
+data: {"text": " a"}
+
+event: token
+data: {"text": " network"}
+
+event: token
+data: {"text": " intrusion"}
+
+event: token
+data: {"text": " detection"}
+
+event: token
+data: {"text": " system"}
+
+event: token
+data: {"text": " that"}
+
+event: token
+data: {"text": " monitors"}
+
+event: token
+data: {"text": " and"}
+
+event: token
+data: {"text": " analyzes"}
+
+event: token
+data: {"text": " network"}
+
+event: token
+data: {"text": " traffic"}
+
+event: token
+data: {"text": " to"}
+
+event: token
+data: {"text": " identify"}
+
+event: token
+data: {"text": " potential"}
+
+event: token
+data: {"text": " security"}
+
+event: token
+data: {"text": " threats"}
+
+event: token
+data: {"text": ","}
+
+event: token
+data: {"text": " such"}
+
+event: token
+data: {"text": " as"}
+
+event: token
+data: {"text": " unauthorized"}
+
+event: token
+data: {"text": " access"}
+
+event: token
+data: {"text": " or"}
+
+event: token
+data: {"text": " malicious"}
+
+event: token
+data: {"text": " activity"}
+
+event: token
+data: {"text": ","}
+
+event: token
+data: {"text": " by"}
+
+event: token
+data: {"text": " examining"}
+
+event: token
+data: {"text": " packet"}
+
+event: token
+data: {"text": " flows"}
+
+event: token
+data: {"text": " and"}
+
+event: token
+data: {"text": " other"}
+
+event: token
+data: {"text": " network"}
+
+event: token
+data: {"text": " data"}
+
+event: token
+data: {"text": "."}
+
+event: done
+data: {"status": "success", "tokens": 38, "prompt_tokens": 45, "provider": "groq", "model": "llama-3.3-70b-versatile"}
+
