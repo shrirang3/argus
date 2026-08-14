@@ -97,6 +97,14 @@ k8s/                 deployment manifests
 The platform is domain-agnostic — the SDK, ingestion, worker and schema know nothing
 about chat. `services/chat_app/` is the only part that does.
 
+| Service | Port |
+|---|---|
+| Chat | 8000 |
+| Ingestion | 8001 |
+| Dashboard | 8002 |
+| Postgres | 5432 |
+| Redis | 6379 |
+
 **Data model:**
 
 ```
@@ -136,16 +144,6 @@ make migrate               # apply the schema
 make health                # every service should answer ok
 make seed                  # optional: synthetic traffic so the dashboard has data
 ```
-
-Open **http://localhost:8000** and start a conversation.
-
-| Service | URL |
-|---|---|
-| Chat | http://localhost:8000 |
-| Ingestion | http://localhost:8001 |
-| Dashboard | http://localhost:8002 |
-| Postgres | `localhost:5433` — 5433, not 5432, to avoid colliding with a local install |
-| Redis | `localhost:6380` |
 
 Inside the compose network the services still use `postgres:5432` and `redis:6379`;
 only the published host ports are remapped.
