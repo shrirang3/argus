@@ -30,7 +30,8 @@ answers questions about **its own inference telemetry**.
 > of it. Groq and Cerebras are both wired — open-weight models only, pinned per
 > conversation. Runs on Kubernetes too — namespace, Deployments, a StatefulSet
 > for Postgres, host-routed Ingress, HPA on the worker — verified live on a
-> local `kind` cluster. The demo is what remains.
+> local `kind` cluster, with real Groq inference end to end and the dashboard populated
+> by synthetic load. Nothing remains.
 
 <br>
 
@@ -217,7 +218,7 @@ pipeline.
 | **P6** | Dashboard — latency, throughput, errors, cost | 🟢 done |
 | **P7** | Multi-provider — Groq + Cerebras, open-weight models only, per-conversation pin | 🟢 done |
 | **P8** | Kubernetes — self-hosted deploy | 🟢 done |
-| **P9** | Docs + demo | ⚪ todo |
+| **P9** | Docs + demo | 🟢 done |
 
 System design, ingestion flow, scaling and failure assumptions:
 [`ARCHITECTURE.md`](ARCHITECTURE.md).
