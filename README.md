@@ -256,6 +256,15 @@ This repo was built with Claude Code, and stays operable through project skills 
 | [`gen-tests`](.claude/skills/gen-tests/SKILL.md) | Reads the target code and an existing test file's conventions first, lists every branch (happy path + each error/boundary), writes one test per behavior, then actually runs them before reporting done |
 | [`explain-changes`](.claude/skills/explain-changes/SKILL.md) | Turns every code change into an API inventory + edit-by-edit walkthrough — the repo doubles as interview prep, so unexplained code is unusable for that purpose |
 
+Alongside the skills, [`.claude/agents/incident-responder.md`](.claude/agents/incident-responder.md)
+is a dedicated agent, not a skill — it's called in once `health-check` or `usage-report`
+has already surfaced a real symptom (crash loop, growing stream lag, dead letters, error
+spike), and its job is root cause, not a re-statement of the symptom. It's read-only
+(`Bash`/`Read`/`Grep`/`Glob`, no `Edit`/`Write`), reasons from the pipeline's actual
+invariants (dedup on `event_id`, double-layer PII redaction, HPA-on-CPU-as-lag-proxy)
+rather than generic troubleshooting, and reports `SYMPTOM` / `ROOT CAUSE` / `EVIDENCE` /
+`FIX` / `BLAST RADIUS` instead of guessing.
+
 `gen-tests` exists because generated tests are only as good as the branches someone
 thought to ask for — the skill forces branch enumeration (dedup on `event_id`,
 double-layer PII redaction, the non-blocking SDK guarantee, `seq` uniqueness under
