@@ -289,6 +289,31 @@ Streaming uses `fetch()` + `ReadableStream` rather than `EventSource`, because
 that stops a stream is also what produces the `status="cancelled"` inference log — the
 cancel feature and the telemetry are one mechanism.
 
+## Tradeoffs
+
+| Decision | Cost | Why worth it |
+|---|---|---|
+| Dedup on write (`event_id`, no exact-once delivery) | A duplicate delivery can happen | Simpler than coordinating exact-once, and the end result is the same — no duplicate rows |
+| Chat history trimmed, not summarized | Very old messages drop out of context | Summarizing costs an extra LLM call per turn and can misremember; trimming is simpler and fails in an obvious way |
+| Dashboard reads pre-computed 1-minute buckets | Can't show sub-minute precision on wide time windows | Querying raw logs for every chart doesn't scale; a 15-minute rule falls back to raw data for anything recent |
+| Worker autoscales on CPU, not queue backlog | CPU isn't a perfect stand-in for "falling behind" | Kubernetes gives CPU-based scaling for free; real backlog-based scaling needs extra infra this system doesn't need yet |
+| Mock LLM provider by default | No real model output unless you add a key | Anyone can run the whole pipeline with zero setup, and load tests don't waste a real API's free quota |
+
+## Future scope
+
+Things left out on purpose, not missed:
+
+- **A chat-based agent over the metrics** — ask "what's my p99 latency" in plain English
+  instead of reading the dashboard. Skipped because the dashboard already answers this.
+- **Sample successful calls instead of logging every one**, once traffic gets too big
+  for one database to hold in full (still log 100% of errors).
+- **Swap Redis Streams for Kafka** once logs need to be replayable for days, not hours.
+- **Swap the rollup table for TimescaleDB or ClickHouse** once one Postgres table can't
+  keep up with the dashboard's queries.
+- **Scale workers on actual queue backlog**, not CPU, once that gap starts to matter.
+- **Add real auth between services** — right now anything inside the cluster can write
+  to ingestion; a real deployment needs to lock that down.
+
 ---
 
 <p align="center"><sub>Built for the Ollive assignment.</sub></p>
