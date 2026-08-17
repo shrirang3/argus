@@ -24,6 +24,9 @@ off-process without ever blocking the request path.
 It ships with a chatbot that gives it something worth watching: an assistant that
 answers questions about **its own inference telemetry**.
 
+**[Live demo →](https://argus-demo-blue.vercel.app)** — real numbers, screenshots,
+and one Groq call traced end to end, from an actual run of this stack.
+
 <br>
 
 ## Architecture
