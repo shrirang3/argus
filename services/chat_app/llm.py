@@ -23,8 +23,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 PROVIDER = os.getenv("DEFAULT_PROVIDER", "mock")
-ANSWER_MODEL = os.getenv("ANSWER_MODEL", "llama-3.3-70b-versatile")
-ROUTER_MODEL = os.getenv("ROUTER_MODEL", "llama-3.1-8b-instant")
+ANSWER_MODEL = os.getenv("ANSWER_MODEL", "openai/gpt-oss-120b")
+ROUTER_MODEL = os.getenv("ROUTER_MODEL", "openai/gpt-oss-20b")
 MOCK_MODEL = "mock-1"
 
 # Cerebras serves open-weight models (Llama, Qwen) behind an OpenAI-wire

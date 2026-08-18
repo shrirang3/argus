@@ -38,7 +38,7 @@ argus.init(endpoint="http://ingestion:8001/v1/events", service="chat-app")
 
 ```python
 # nothing below changes. it is logged anyway.
-resp = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=msgs)
+resp = client.chat.completions.create(model="openai/gpt-oss-120b", messages=msgs)
 ```
 
 Instrumentation patches the provider client class itself, so it also captures calls
@@ -176,7 +176,7 @@ tokens. For real inference, add a free [Groq](https://console.groq.com) key:
 ```bash
 GROQ_API_KEY=gsk_...
 DEFAULT_PROVIDER=groq
-ANSWER_MODEL=llama-3.3-70b-versatile
+ANSWER_MODEL=openai/gpt-oss-120b
 ```
 
 `make up` again and the same interface returns real tokens. Nothing downstream changes —

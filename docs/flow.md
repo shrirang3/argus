@@ -165,7 +165,7 @@ ORM rows, flattened to the provider's message shape:
 OpenAI wire shape, via the official `groq` SDK (**not** raw HTTP — see §6):
 
 ```json
-{"model": "llama-3.3-70b-versatile",
+{"model": "openai/gpt-oss-120b",
  "messages": [{"role": "user", "content": "..."}],
  "stream": true}
 ```
@@ -223,7 +223,7 @@ data: {"text": "P99 "}
 
 event: done
 data: {"status":"success","tokens":26,"prompt_tokens":45,
-       "provider":"groq","model":"llama-3.3-70b-versatile"}
+       "provider":"groq","model":"openai/gpt-oss-120b"}
 
 event: error
 data: {"message": "..."}
@@ -245,8 +245,8 @@ connection opens, before the model has produced anything.
   "service": "chat-app",
 
   "provider": "groq",
-  "model": "llama-3.3-70b-versatile",
-  "response_model": "llama-3.3-70b-versatile",
+  "model": "openai/gpt-oss-120b",
+  "response_model": "openai/gpt-oss-120b",
   "operation": "chat",
 
   "status": "success",
@@ -305,7 +305,7 @@ tables as our SDK with no new code on either side.
     "status": {"code": 1},
     "attributes": [
       {"key": "gen_ai.system",             "value": {"stringValue": "groq"}},
-      {"key": "gen_ai.request.model",      "value": {"stringValue": "llama-3.3-70b-versatile"}},
+      {"key": "gen_ai.request.model",      "value": {"stringValue": "openai/gpt-oss-120b"}},
       {"key": "gen_ai.usage.input_tokens", "value": {"intValue": "120"}},
       {"key": "gen_ai.usage.output_tokens","value": {"intValue": "60"}}
     ]}]}]}]}
